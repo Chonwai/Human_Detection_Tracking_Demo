@@ -1,0 +1,41 @@
+logs/
+*.log
+*.log.*
+*.log.*.*
+*.log.*.*.*
+*.log.*.*.*.*
+*.log.*.*.*.*.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+
+# 輸出數據目錄
+data/output
+data/videos
+data/models
+
+# 大型數據文件（除非使用LFS追蹤）
+# 注意：模型文件(.pt)現在由Git LFS追蹤，不需要在此忽略
+
+# 臨時文件
+.ipynb_checkpoints/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 虛擬環境
+venv/
+env/
+.env/
+
+# MacOS
+.DS_Store
+
+# 編輯器配置
+.vscode/
+.idea/
