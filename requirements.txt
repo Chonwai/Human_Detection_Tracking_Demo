@@ -1,0 +1,24 @@
+# 核心依賴
+streamlit>=1.25.0
+opencv-python>=4.7.0
+numpy>=1.21.0
+ultralytics>=8.3.93  # YOLOv8
+streamlit-webrtc>=0.47.0
+
+# 數據處理
+pandas>=1.3.0
+plotly>=5.14.0
+
+# 追蹤器相關依賴
+scikit-learn>=1.0.0  # 用於特徵匹配和降維
+scipy>=1.7.0  # 用於科學計算和信號處理
+
+# 模型優化
+onnx>=1.14.0
+onnxruntime>=1.14.0
+
+# 開發工具
+pytest>=7.0.0
+black>=22.0.0
+isort>=5.10.0
+pylint>=2.15.0 
