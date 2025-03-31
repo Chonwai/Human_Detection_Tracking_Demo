@@ -337,12 +337,27 @@ def main():
     with st.sidebar:
         st.header("系統配置")
 
-        # 輸入源選擇
+        # 選擇輸入源
         source_type = st.radio(
             "選擇輸入源", ["視頻文件", "攝像頭", "RTSP串流", "示例視頻"]
         )
+        
+        # === 新增配置選項 ===
+        with st.expander("高級設置", expanded=False):
+            # 添加完整頁面刷新設置
+            enable_full_refresh = st.checkbox("啟用定期頁面刷新", value=False, 
+                                             help="定期重載頁面以優化長時間運行性能。若應用變得緩慢可嘗試啟用此選項。")
+            
+            if enable_full_refresh:
+                refresh_interval = st.slider("頁面刷新間隔（秒）", 
+                                           min_value=10, max_value=120, value=30, step=10,
+                                           help="設置多久自動刷新一次頁面。時間越長，視頻處理越連續，但可能影響長時間穩定性。")
+            else:
+                refresh_interval = 999999  # 實際上禁用刷新
+                
+            st.caption("注意：頁面刷新可能導致視頻處理短暫中斷，但有助於釋放內存和保持長時間運行穩定。")
 
-        # 根據選擇顯示相應的配置選項
+        # 輸入源選擇
         video_source = None
         if source_type == "視頻文件":
             video_file = st.file_uploader("上傳視頻文件", type=["mp4", "avi", "mov"])
@@ -899,21 +914,27 @@ def main():
                 if "last_rerun_time" not in st.session_state:
                     st.session_state.last_rerun_time = 0
                     
-                # 每10秒執行一次完整rerun，確保頁面不會因長時間運行而變得遲鈍
-                if current_time - st.session_state.last_rerun_time >= 10.0:
-                    # 保存處理狀態，確保rerun後能繼續處理
-                    st.session_state.temp_processing_state = True
-                    st.session_state.processing_continuity["detector"] = detector
-                    st.session_state.processing_continuity["tracker"] = tracker
-                    st.session_state.processing_continuity["last_frame"] = frame.copy()
-                    
-                    # 保存當前幀位置，以便恢復
-                    next_frame_position = current_frame_pos + 1
-                    st.session_state.video_state["frame_position"] = next_frame_position
-                    
-                    st.session_state.last_rerun_time = current_time
-                    logger.info("執行定期頁面重載，位置: " + str(next_frame_position))
-                    st.rerun()
+                # 使用用戶配置的刷新間隔 - 如果啟用了刷新功能
+                # 注意：refresh_interval在enable_full_refresh為False時為999999秒（實際上禁用刷新）
+                if current_time - st.session_state.last_rerun_time >= refresh_interval:
+                    # 僅在啟用定期刷新時執行rerun
+                    if enable_full_refresh:
+                        # 保存處理狀態，確保rerun後能繼續處理
+                        st.session_state.temp_processing_state = True
+                        st.session_state.processing_continuity["detector"] = detector
+                        st.session_state.processing_continuity["tracker"] = tracker
+                        st.session_state.processing_continuity["last_frame"] = frame.copy()
+                        
+                        # 保存當前幀位置，以便恢復
+                        next_frame_position = current_frame_pos + 1
+                        st.session_state.video_state["frame_position"] = next_frame_position
+                        
+                        st.session_state.last_rerun_time = current_time
+                        logger.info(f"執行定期頁面重載，間隔{refresh_interval}秒，當前位置: {next_frame_position}")
+                        st.rerun()
+                    else:
+                        # 僅更新時間戳但不執行rerun
+                        st.session_state.last_rerun_time = current_time
                 
                 # === 關鍵修復：視頻顯示代碼 ===
                 # 繪製結果
