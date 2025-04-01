@@ -9,12 +9,17 @@ import numpy as np
 import cv2
 from typing import Tuple, List, Dict, Any, Optional
 from pathlib import Path
+import logging
 
 from ultralytics import YOLO
 import torch
 
 from core.detector_base import DetectorBase
-from config.settings import DETECTION_CONF, DETECTION_IOU, DETECTION_CLASSES, DEVICE, MODEL_DIR, PROJECT_ROOT, IS_JETSON, ENABLE_TENSORRT
+from config.settings import DETECTION_CONF, DETECTION_IOU, DETECTION_CLASSES, DEVICE, MODEL_DIR, PROJECT_ROOT
+from core.platform_utils import is_jetson, is_mac, get_optimal_device, DEVICE_CUDA, DEVICE_MPS, DEVICE_CPU
+
+# 設置日誌
+logger = logging.getLogger("YOLODetector")
 
 class YOLODetector(DetectorBase):
     """
@@ -52,151 +57,190 @@ class YOLODetector(DetectorBase):
         # 模型實例
         self.model = None
         
+        # 日誌
+        logger.info(f"初始化 YOLODetector: 模型={model_name}, 設備={device}")
+        
         # 加載模型
         self.load_model()
     
     def _get_model_path(self) -> Path:
         """
         獲取模型路徑
-        如果是預設模型名稱，優先從模型目錄讀取；如果是本地路徑，則使用該路徑
         
         Returns:
-            模型路徑
+            模型的完整路徑
         """
-        # 檢查模型目錄中是否已有該模型
-        model_dir_path = MODEL_DIR / self.model_name
-        if model_dir_path.exists():
-            print(f"從模型目錄加載模型: {model_dir_path}")
-            return model_dir_path
-        
-        # 向後兼容：檢查根目錄中是否有該模型
-        root_model_path = Path(PROJECT_ROOT) / self.model_name
-        if root_model_path.exists():
-            print(f"警告: 從項目根目錄加載模型，建議將模型移至 {MODEL_DIR}")
-            return root_model_path
-        
-        # 檢查是否是完整路徑
-        if Path(self.model_name).exists():
+        # 檢查是否提供了絕對路徑
+        if Path(self.model_name).is_absolute() and Path(self.model_name).exists():
             return Path(self.model_name)
         
-        # 返回模型名，YOLO庫會自動下載
-        print(f"未找到本地模型，嘗試使用 YOLO 庫下載模型: {self.model_name}")
-        return self.model_name
+        # 檢查模型目錄中是否存在模型文件
+        model_path = MODEL_DIR / self.model_name
+        if model_path.exists():
+            return model_path
+        
+        # 如果模型文件不存在，則假設它是一個預訓練的模型名稱
+        # 讓ultralytics庫從預訓練模型庫中下載
+        return Path(self.model_name)
     
     def load_model(self) -> None:
         """
         加載YOLO模型
+        
+        使用跨平台的方式加載模型，自動檢測並使用最適合當前平台的加速方式。
+        支持Jetson平台的CUDA加速、Apple Silicon的MPS加速和其他平台的標準執行。
         """
         try:
-            # 檢查Jetson特定優化選項
-            use_tensorrt = ENABLE_TENSORRT and IS_JETSON
-            use_half = False  # 默認不使用半精度
+            # 獲取平台特定優化選項
+            use_tensorrt = False
+            use_half = False
             
-            # 如果在app.py中設置了這些參數，從session_state獲取
-            import streamlit as st
-            if 'enable_tensorrt' in st.session_state:
-                use_tensorrt = st.session_state.enable_tensorrt
-            if 'use_half_precision' in st.session_state:
-                use_half = st.session_state.use_half_precision
+            # 從streamlit session_state中讀取用戶配置（如果可用）
+            try:
+                import streamlit as st
+                if 'enable_tensorrt' in st.session_state:
+                    use_tensorrt = st.session_state.enable_tensorrt
+                if 'use_half_precision' in st.session_state:
+                    use_half = st.session_state.use_half_precision
+                if 'use_mps' in st.session_state:
+                    # 如果用戶明確禁用MPS，則回退到CPU
+                    if not st.session_state.use_mps and self.device == DEVICE_MPS:
+                        self.device = DEVICE_CPU
+                        logger.info("遵循用戶設置，禁用MPS加速")
+            except ImportError:
+                # 在非Streamlit環境中無法獲取session_state
+                logger.debug("未在Streamlit環境中運行，無法獲取用戶UI配置")
             
-            # 使用Ultralytics YOLO庫加載模型，添加優化選項
-            if use_tensorrt:
-                print("使用TensorRT優化模型...")
-                try:
-                    # 嘗試使用TensorRT加速選項加載模型
-                    self.model = YOLO(self.model_path)
-                    # 啟用TensorRT導出（首次使用可能較慢）
-                    self.model.to('cuda')
-                    self.model.fuse()  # 融合層以提高性能
+            # 標準模式加載基本模型
+            logger.info(f"開始加載模型 {self.model_name}...")
+            self.model = YOLO(self.model_path)
+            
+            # ==== 平台特定優化 ====
+            # 1. Jetson平台CUDA優化
+            if is_jetson() and self.device == DEVICE_CUDA:
+                if torch.cuda.is_available():
+                    logger.info("在Jetson平台上優化CUDA執行...")
                     
-                    # 使用half精度來提高性能（如果啟用）
-                    if use_half:
-                        print("啟用FP16半精度...")
-                        self.model = self.model.half()
+                    # 設置當前CUDA設備
+                    torch.cuda.set_device(0)
+                    
+                    # 嘗試CUDA初始化測試
+                    try:
+                        test_tensor = torch.ones(1).cuda()
+                        del test_tensor  # 立即釋放內存
                         
-                    print("TensorRT優化成功")
-                except Exception as e:
-                    print(f"TensorRT優化失敗: {e}")
-                    print("回退到標準模式加載模型")
-                    self.model = YOLO(self.model_path)
-                    use_tensorrt = False
-            else:
-                # 標準模式加載模型
-                self.model = YOLO(self.model_path)
-            
-            # 增強的設備選擇邏輯，針對Jetson平台優化
-            if self.device != 'cpu':
-                # 檢查CUDA可用性，並提供詳細日誌
-                if self.device == 'cuda':
-                    if torch.cuda.is_available():
-                        # 設置當前的CUDA設備
-                        torch.cuda.set_device(0)  # 預設使用Jetson的GPU 0
+                        # CUDA可用，應用Jetson特定優化
+                        # 1.1 嘗試TensorRT優化
+                        if use_tensorrt:
+                            try:
+                                logger.info("嘗試應用TensorRT優化...")
+                                self.model.to('cuda')
+                                self.model.fuse()  # 融合層以提高性能
+                                logger.info("TensorRT優化成功應用")
+                            except Exception as e:
+                                logger.warning(f"TensorRT優化失敗: {e}")
+                                logger.info("繼續使用標準CUDA加速")
                         
-                        # 檢查CUDA是否能被訪問
-                        try:
-                            # 嘗試在CUDA上創建一個小張量作為測試
-                            test_tensor = torch.ones(1).cuda()
-                            del test_tensor  # 即時釋放內存
-                            
-                            # 設置模型到CUDA
-                            self.model.to(self.device)
-                            
-                            # 如果啟用half精度但尚未應用（未使用TensorRT）
-                            if use_half and not use_tensorrt:
-                                print("啟用FP16半精度...")
+                        # 1.2 應用半精度計算（如果啟用）
+                        if use_half:
+                            try:
+                                logger.info("應用FP16半精度計算...")
                                 self.model = self.model.half()
-                            
-                            # 輸出詳細的CUDA信息以進行診斷
-                            cuda_device_count = torch.cuda.device_count()
-                            cuda_device_name = torch.cuda.get_device_name(0)
-                            cuda_cap_major, cuda_cap_minor = torch.cuda.get_device_capability(0)
-                            
-                            print(f"成功啟用CUDA，找到{cuda_device_count}個GPU設備")
-                            print(f"當前使用: {cuda_device_name}")
-                            print(f"計算能力: {cuda_cap_major}.{cuda_cap_minor}")
-                            print(f"可用GPU內存: {torch.cuda.get_device_properties(0).total_memory / 1024 / 1024 / 1024:.2f} GB")
-                            
-                            # 如果在Jetson上但性能仍然較差，提供進一步指導
-                            if IS_JETSON:
-                                print("檢測到Jetson平台，應用特定優化...")
-                                print(f"TensorRT加速: {'啟用' if use_tensorrt else '禁用'}")
-                                print(f"半精度計算: {'啟用' if use_half else '禁用'}")
-                                
-                                # 獲取當前批處理大小設置（如果有）
-                                batch_size = 1  # 默認值
-                                if 'batch_size' in st.session_state:
-                                    batch_size = st.session_state.batch_size
-                                print(f"批處理大小: {batch_size}")
-                                
-                                # 獲取縮放係數（如果有）
-                                if 'resolution_scale' in st.session_state:
-                                    print(f"分辨率縮放: {st.session_state.resolution_scale:.2f}")
-                        except RuntimeError as e:
-                            print(f"CUDA初始化錯誤: {e}")
-                            print("回退到CPU模式")
-                            self.device = 'cpu'
-                    else:
-                        print("CUDA在PyTorch中不可用，檢查CUDA庫和驅動是否正確安裝")
-                        print("對於Jetson平台，請確保安裝了正確版本的JetPack和PyTorch")
-                        self.device = 'cpu'
-                elif self.device == 'mps' and torch.backends.mps.is_available():
-                    # 對於Apple Silicon，使用MPS
-                    self.model.to(self.device)
+                            except Exception as e:
+                                logger.warning(f"半精度轉換失敗: {e}")
+                        
+                        # 1.3 移動模型到CUDA設備
+                        self.model.to(self.device)
+                        
+                        # 1.4 輸出CUDA診斷信息
+                        cuda_device_count = torch.cuda.device_count()
+                        cuda_device_name = torch.cuda.get_device_name(0)
+                        logger.info(f"CUDA初始化成功: {cuda_device_count}個GPU, 設備: {cuda_device_name}")
+                        
+                    except RuntimeError as e:
+                        logger.error(f"CUDA初始化失敗: {e}")
+                        logger.warning("回退到CPU模式")
+                        self.device = DEVICE_CPU
+                        self.model.to(self.device)
                 else:
-                    # 如果指定設備不可用，回退到CPU
-                    self.device = 'cpu'
-                    print(f"警告: {self.device} 不可用，使用CPU替代。")
+                    logger.warning("CUDA在PyTorch中不可用，使用CPU替代")
+                    logger.info("對於Jetson平台，請確保安裝了正確版本的PyTorch (arm64/aarch64)")
+                    self.device = DEVICE_CPU
+                    self.model.to(self.device)
             
-            # 如果設備是CPU，提供一些性能建議
-            if self.device == 'cpu':
-                print("在CPU上運行檢測模型會比較慢。若要提升性能，請確保GPU可用並正確配置。")
-                # 檢查當前加載的模型大小
-                if 'n' not in self.model_name and 's' not in self.model_name:
-                    print("提示: 您正在CPU上使用較大的模型。考慮使用較小的模型（如yolov10n.pt）提高性能。")
+            # 2. Mac平台MPS優化 (Apple Silicon)
+            elif is_mac() and self.device == DEVICE_MPS:
+                if torch.backends.mps.is_available():
+                    logger.info("在Mac平台上使用MPS (Metal Performance Shaders) 加速...")
+                    
+                    # 設置內存限制（如果在UI中設置）
+                    try:
+                        import streamlit as st
+                        if 'gpu_mem_limit' in st.session_state:
+                            # 注意：這只是記錄，PyTorch目前沒有直接限制MPS內存使用的API
+                            logger.info(f"設置GPU內存限制: {st.session_state.gpu_mem_limit}GB")
+                    except ImportError:
+                        pass
+                    
+                    try:
+                        # 移動模型到MPS設備
+                        self.model.to(self.device)
+                        logger.info("MPS加速成功應用")
+                    except Exception as e:
+                        logger.error(f"MPS初始化失敗: {e}")
+                        logger.warning("回退到CPU模式")
+                        self.device = DEVICE_CPU
+                        self.model.to(self.device)
+                else:
+                    logger.warning("MPS在PyTorch中不可用，使用CPU替代")
+                    self.device = DEVICE_CPU
+                    self.model.to(self.device)
             
-            print(f"成功加載模型 {self.model_name} 到 {self.device} 設備")
+            # 3. 標準CUDA平台（非Jetson的NVIDIA GPU）
+            elif self.device == DEVICE_CUDA:
+                if torch.cuda.is_available():
+                    logger.info("在標準CUDA平台上運行...")
+                    try:
+                        # 移動模型到CUDA設備
+                        self.model.to(self.device)
+                        
+                        # 應用半精度計算（如果啟用）
+                        if use_half:
+                            try:
+                                logger.info("應用FP16半精度計算...")
+                                self.model = self.model.half()
+                            except Exception as e:
+                                logger.warning(f"半精度轉換失敗: {e}")
+                        
+                        # 輸出CUDA信息
+                        cuda_device_name = torch.cuda.get_device_name(0)
+                        logger.info(f"CUDA初始化成功，使用設備: {cuda_device_name}")
+                    except RuntimeError as e:
+                        logger.error(f"CUDA初始化失敗: {e}")
+                        logger.warning("回退到CPU模式")
+                        self.device = DEVICE_CPU
+                        self.model.to(self.device)
+                else:
+                    logger.warning("CUDA在PyTorch中不可用，使用CPU替代")
+                    self.device = DEVICE_CPU
+                    self.model.to(self.device)
+            
+            # 4. CPU平台（或回退設備）
+            else:
+                logger.info("在CPU上運行模型...")
+                self.model.to(self.device)
+                
+                # 檢查模型大小，提供性能建議
+                if any(x in self.model_name.lower() for x in ['l', 'x']):
+                    logger.warning("您正在CPU上使用較大的模型。考慮使用較小的模型（如yolov8n.pt）以提高性能。")
+            
+            logger.info(f"模型 {self.model_name} 成功加載到 {self.device} 設備")
+            
         except Exception as e:
-            print(f"加載模型時出錯: {e}")
+            logger.error(f"模型加載失敗: {e}")
+            # 在開發環境中提供完整錯誤信息
+            import traceback
+            logger.debug(traceback.format_exc())
             raise
     
     def preprocess(self, frame: np.ndarray) -> np.ndarray:

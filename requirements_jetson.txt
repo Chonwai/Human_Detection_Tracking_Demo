@@ -1,0 +1,19 @@
+# Jetson平台特定依賴 - 注意不要使用pip安裝torch/torchvision
+-r requirements.txt
+
+# !!! 重要提示 !!!
+# 不要通過pip安裝torch和torchvision，這些庫需要使用NVIDIA提供的Jetson特定wheel檔案
+# 請參考README.md中的安裝指南或執行以下命令：
+#
+# 對於JetPack 5.1.1/L4T R35.3.1:
+# wget https://nvidia.box.com/shared/static/i8pukei49fgbf1qp2i8nsi113dtj2xj0.whl -O torch-2.1.0-cp310-cp310-linux_aarch64.whl
+# pip install torch-2.1.0-cp310-cp310-linux_aarch64.whl
+#
+# 然後安裝相容的torchvision:
+# git clone --branch v0.16.0 https://github.com/pytorch/vision torchvision
+# cd torchvision
+# python setup.py install
+
+# Jetson特定優化庫
+# 注意：某些庫可能已經預裝在JetPack中
+jetson-stats  # 用於監控Jetson硬件性能 

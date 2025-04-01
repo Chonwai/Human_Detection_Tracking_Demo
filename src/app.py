@@ -30,6 +30,7 @@ from utils.visualization import (
     draw_all_detections,
 )
 from utils.image_enhancement import enhance_image, apply_histogram_equalization
+from core.platform_utils import is_jetson, is_mac, get_platform_info
 
 # 設置頁面配置
 st.set_page_config(
@@ -364,8 +365,11 @@ def main():
             st.caption("注意：頁面刷新可能導致視頻處理短暫中斷，但有助於釋放內存和保持長時間運行穩定。")
             
             # 添加Jetson平台特定優化選項
-            from config.settings import IS_JETSON
-            if IS_JETSON:
+            # 獲取平台信息
+            platform_info = get_platform_info()
+            
+            # Jetson平台優化選項
+            if is_jetson():
                 st.markdown("### Jetson平台優化")
                 
                 # 處理分辨率調整（較低分辨率可提高性能）
@@ -405,8 +409,88 @@ def main():
                 # 設置環境變量（這裡只是記錄，實際應該在啟動腳本中設置）
                 st.caption("請確保已在執行環境中設置以下環境變量：")
                 st.code("export OPENBLAS_CORETYPE=ARMV8")
+            
+            # Mac平台優化選項    
+            elif is_mac():
+                st.markdown("### Mac平台優化")
                 
-            # 其他高級設置...
+                # GPU內存限制選項
+                gpu_mem_limit = st.slider(
+                    "GPU內存限制 (GB)", 
+                    min_value=1.0, 
+                    max_value=8.0, 
+                    value=4.0, 
+                    step=0.5,
+                    help="限制PyTorch使用的GPU內存量，可防止系統內存不足"
+                )
+                
+                # 啟用MPS加速選項
+                if platform_info.get("mps_available", False):
+                    use_mps = st.checkbox(
+                        "使用Apple Silicon加速 (MPS)", 
+                        value=True,
+                        help="啟用Metal Performance Shaders (MPS) 來加速模型推理"
+                    )
+                    
+                    st.info("⚠️ 提示：在某些情況下，如果遇到MPS相關錯誤，您可能需要禁用MPS加速。")
+                
+                # 電源管理選項
+                power_mode = st.radio(
+                    "電源模式",
+                    options=["平衡", "高性能", "節能"],
+                    index=0,
+                    help="高性能模式會消耗更多電池，但處理速度更快"
+                )
+            
+            # 通用性能優化選項（適用於所有平台）
+            st.markdown("### 通用優化")
+            
+            # 線程設置
+            worker_threads = st.slider(
+                "工作線程數", 
+                min_value=1, 
+                max_value=16, 
+                value=4, 
+                step=1,
+                help="用於視頻處理的線程數量。更多線程可能提高性能，但會增加CPU使用率"
+            )
+            
+            # 緩存設置
+            enable_cache = st.checkbox(
+                "啟用模型緩存", 
+                value=True,
+                help="緩存模型以加速重複推理，但會使用更多內存"
+            )
+            
+            # 存儲設置到session_state
+            for key, value in {
+                "worker_threads": worker_threads,
+                "enable_cache": enable_cache,
+            }.items():
+                if key not in st.session_state or st.session_state[key] != value:
+                    st.session_state[key] = value
+                    
+            # 針對特定平台存儲設置
+            if is_jetson():
+                for key, value in {
+                    "resolution_scale": resolution_scale,
+                    "enable_tensorrt": enable_tensorrt,
+                    "batch_size": batch_size,
+                    "use_half_precision": use_half_precision
+                }.items():
+                    if key not in st.session_state or st.session_state[key] != value:
+                        st.session_state[key] = value
+            elif is_mac():
+                for key, value in {
+                    "gpu_mem_limit": gpu_mem_limit,
+                    "power_mode": power_mode
+                }.items():
+                    if key not in st.session_state or st.session_state[key] != value:
+                        st.session_state[key] = value
+                
+                if platform_info.get("mps_available", False):
+                    if "use_mps" not in st.session_state or st.session_state.use_mps != use_mps:
+                        st.session_state.use_mps = use_mps
 
         # 輸入源選擇
         video_source = None

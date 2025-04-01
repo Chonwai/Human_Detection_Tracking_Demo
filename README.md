@@ -21,15 +21,89 @@ human_detection_tracking/
 └── scripts/              # Utility scripts
 ```
 
-## Installation and Running
+## Cross-platform Installation and Running
 
-### 1. Install Dependencies
+This project supports multiple platforms including Mac (both Intel and Apple Silicon) and NVIDIA Jetson devices. The installation process has been simplified to automatically adapt to different platforms.
+
+### 1. Quick Setup (Recommended for All Platforms)
 
 ```bash
-pip install -r requirements.txt
+# Clone the repository
+git clone https://github.com/username/human_detection_tracking.git
+cd human_detection_tracking
+
+# Set up the environment and start the application
+./run.sh --setup
 ```
 
-### 2. Download YOLO Models
+The `run.sh` script will:
+- Automatically detect your platform (Mac, Jetson, Linux, Windows)
+- Set up a virtual environment with the correct dependencies
+- Download necessary models (if not present)
+- Configure platform-specific optimizations
+- Start the application
+
+### 2. Manual Setup
+
+If you prefer to perform manual setup, follow these steps:
+
+#### For Mac (Apple Silicon/Intel)
+
+```bash
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements_mac.txt
+
+# Start the application
+streamlit run src/app.py
+```
+
+#### For NVIDIA Jetson
+
+```bash
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install the Jetson-specific PyTorch version
+# For JetPack 5.1.1 (L4T R35.3.1) - adjust URLs based on your JetPack version
+wget https://nvidia.box.com/shared/static/i8pukei49fgbf1qp2i8nsi113dtj2xj0.whl -O torch-2.1.0-cp310-cp310-linux_aarch64.whl
+pip install torch-2.1.0-cp310-cp310-linux_aarch64.whl
+
+# Install compatible torchvision
+git clone --branch v0.16.0 https://github.com/pytorch/vision torchvision
+cd torchvision
+python setup.py install
+cd ..
+
+# Install Jetson-specific utilities
+pip install jetson-stats
+
+# Start the application with optimizations
+sudo ./run_jetson.sh  # Using sudo for maximum performance
+```
+
+#### For Standard Linux/Windows
+
+```bash
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the application
+streamlit run src/app.py
+```
+
+### 3. Download YOLO Models
 
 Make sure all YOLO model files are placed in the `data/models/` directory.
 
@@ -38,58 +112,30 @@ Recommended models include:
 - YOLOv10-medium: Medium model balancing speed and accuracy
 - YOLOv10/YOLOv12-large/xlarge: High accuracy models requiring more computing power
 
-### 3. Running the Application
+## Platform-specific Optimizations
 
-To start the application, use the Streamlit command:
+### Mac (Apple Silicon)
+- Automatically uses Metal Performance Shaders (MPS) for GPU acceleration
+- Optimized memory usage for Apple Silicon
+- Power mode selection for performance/battery balance
 
-```bash
-streamlit run src/app.py
-```
+### NVIDIA Jetson
+- CUDA acceleration with TensorRT optimization
+- FP16 half precision for improved performance
+- Resolution scaling to balance performance and accuracy
+- Batch size adjustment for optimal throughput
 
-The application will be accessible through your web browser at `http://localhost:8501` by default.
+### Diagnostic Tools
 
-### 4. Running on NVIDIA Jetson
-
-When deploying on NVIDIA Jetson platforms, special considerations are needed to achieve optimal performance:
-
-#### Install the Correct PyTorch Version
-
-NVIDIA Jetson requires a specific PyTorch version built for its ARM architecture. Do not use the standard pip-installed PyTorch:
-
-```bash
-# First remove any existing PyTorch installations
-pip uninstall torch torchvision
-
-# Install the Jetson-compatible PyTorch version
-# Check https://forums.developer.nvidia.com/t/pytorch-for-jetson/ for the latest version
-```
-
-You can find the latest compatible wheels for your JetPack version at NVIDIA's forums. For example:
+If you encounter performance issues, the project includes diagnostic tools:
 
 ```bash
-# For JetPack 5.1.1 (L4T R35.3.1)
-wget https://nvidia.box.com/shared/static/i8pukei49fgbf1qp2i8nsi113dtj2xj0.whl -O torch-2.1.0-cp310-cp310-linux_aarch64.whl
-pip install torch-2.1.0-cp310-cp310-linux_aarch64.whl
+# Check platform configuration
+python -m src.core.platform_utils
 
-# Install compatible torchvision
-git clone --branch v0.16.0 https://github.com/pytorch/vision torchvision
-cd torchvision
-python setup.py install
+# For Jetson-specific CUDA diagnostics
+python scripts/check_cuda.py
 ```
-
-#### Performance Optimization Tips
-
-1. Use lightweight models (nano or small) for better performance.
-2. Run the diagnostic script to verify CUDA is working properly:
-   ```bash
-   python scripts/check_cuda.py
-   ```
-3. Set appropriate environment variables:
-   ```bash
-   export OPENBLAS_CORETYPE=ARMV8
-   ```
-4. Enabling TensorRT optimization can significantly improve performance
-5. Lower the resolution and reduce the maximum FPS in the settings to achieve smoother performance
 
 ## Features
 
@@ -108,12 +154,24 @@ The application provides various configuration options through the sidebar:
 - Display options (bounding boxes, IDs, trajectories, heatmaps)
 - Image enhancement methods
 - Performance settings (FPS limit)
+- Platform-specific optimizations
+
+## Troubleshooting
+
+### Mac Issues
+- If you encounter MPS-related errors, try disabling MPS acceleration in the advanced settings
+- Ensure you have the latest version of PyTorch that supports MPS
+
+### Jetson Issues
+- Make sure you've installed the correct PyTorch version for your JetPack/L4T version
+- If CUDA is not detected, run the diagnostic script and check the error messages
+- Try using a smaller model (nano) and lower resolution for better performance
 
 ## Requirements
 
 - Python 3.8+
-- PyTorch
+- PyTorch (platform-specific version)
 - OpenCV
 - Streamlit
 - NumPy
-- Other dependencies listed in requirements.txt
+- Other dependencies listed in requirements*.txt files

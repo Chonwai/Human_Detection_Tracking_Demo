@@ -1,0 +1,9 @@
+# Mac平台特定依賴 - 針對Apple Silicon優化
+-r requirements.txt
+
+# 標準PyTorch安裝 (會自動支援MPS加速)
+torch>=2.2.0
+torchvision>=0.17.0
+
+# Mac特定優化
+# 提示：使用pip install這些庫，Conda可能在Apple Silicon上有相容性問題 
