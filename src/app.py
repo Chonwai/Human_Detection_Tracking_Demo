@@ -160,6 +160,9 @@ def main():
             logger.warning("圖表容器未初始化")
             return
             
+        # 生成當前時間戳作為key的一部分，確保每次更新都有唯一的key
+        current_timestamp = int(time.time() * 1000)
+            
         if st.session_state.stats["timestamps"]:
             # 創建相對時間軸
             relative_times = [
@@ -205,7 +208,8 @@ def main():
                 ),
                 font=dict(size=10),
             )
-            trend_chart.plotly_chart(fig1, use_container_width=True)
+            # 使用當前時間戳作為key的一部分，確保唯一性
+            trend_chart.plotly_chart(fig1, use_container_width=True, key=f"person_trend_chart_{current_timestamp}")
             
             # FPS趨勢圖
             fig2 = go.Figure()
@@ -225,7 +229,8 @@ def main():
                 margin=dict(l=0, r=0, t=10, b=0),
                 font=dict(size=10),
             )
-            fps_chart.plotly_chart(fig2, use_container_width=True)
+            # 使用當前時間戳作為key的一部分，確保唯一性
+            fps_chart.plotly_chart(fig2, use_container_width=True, key=f"fps_trend_chart_{current_timestamp}")
             
             # 軌跡分析（如果啟用追蹤）
             if tracking_enabled and track_chart and len(st.session_state.all_tracks) > 0:
@@ -262,7 +267,8 @@ def main():
                         margin=dict(l=0, r=0, t=10, b=0),
                         font=dict(size=10),
                     )
-                    track_chart.plotly_chart(fig3, use_container_width=True)
+                    # 使用當前時間戳作為key的一部分，確保唯一性
+                    track_chart.plotly_chart(fig3, use_container_width=True, key=f"track_duration_chart_{current_timestamp}")
     # ==== 函數定義區結束 ====
 
     # 添加自定義CSS以支持深色模式
