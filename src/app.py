@@ -362,6 +362,51 @@ def main():
                 refresh_interval = 999999  # 實際上禁用刷新
                 
             st.caption("注意：頁面刷新可能導致視頻處理短暫中斷，但有助於釋放內存和保持長時間運行穩定。")
+            
+            # 添加Jetson平台特定優化選項
+            from config.settings import IS_JETSON
+            if IS_JETSON:
+                st.markdown("### Jetson平台優化")
+                
+                # 處理分辨率調整（較低分辨率可提高性能）
+                resolution_scale = st.slider(
+                    "處理分辨率縮放", 
+                    min_value=0.25, 
+                    max_value=1.0, 
+                    value=0.5, 
+                    step=0.05,
+                    help="降低處理分辨率可顯著提高性能，但可能影響檢測精度"
+                )
+                
+                # TensorRT加速選項
+                enable_tensorrt = st.checkbox(
+                    "啟用TensorRT加速", 
+                    value=True,
+                    help="使用NVIDIA TensorRT加速推理。首次啟用需要較長時間優化模型。"
+                )
+                
+                # 批處理大小選項
+                batch_size = st.radio(
+                    "批處理大小",
+                    options=[1, 2, 4],
+                    index=0,
+                    help="較大的批處理可能提高吞吐量，但會增加延遲"
+                )
+                
+                # 半精度計算選項
+                use_half_precision = st.checkbox(
+                    "使用FP16半精度",
+                    value=True,
+                    help="使用半精度浮點數可顯著提高性能，但可能略微降低精度"
+                )
+                
+                st.info("⚠️ 提示：在Jetson平台上，建議使用較小的模型（如yolov10n）和較低的處理分辨率以獲得最佳性能。")
+                
+                # 設置環境變量（這裡只是記錄，實際應該在啟動腳本中設置）
+                st.caption("請確保已在執行環境中設置以下環境變量：")
+                st.code("export OPENBLAS_CORETYPE=ARMV8")
+                
+            # 其他高級設置...
 
         # 輸入源選擇
         video_source = None

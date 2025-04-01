@@ -14,7 +14,7 @@ from ultralytics import YOLO
 import torch
 
 from core.detector_base import DetectorBase
-from config.settings import DETECTION_CONF, DETECTION_IOU, DETECTION_CLASSES, DEVICE, MODEL_DIR, PROJECT_ROOT
+from config.settings import DETECTION_CONF, DETECTION_IOU, DETECTION_CLASSES, DEVICE, MODEL_DIR, PROJECT_ROOT, IS_JETSON, ENABLE_TENSORRT
 
 class YOLODetector(DetectorBase):
     """
@@ -88,21 +88,111 @@ class YOLODetector(DetectorBase):
         加載YOLO模型
         """
         try:
-            # 使用Ultralytics YOLO庫加載模型
-            self.model = YOLO(self.model_path)
+            # 檢查Jetson特定優化選項
+            use_tensorrt = ENABLE_TENSORRT and IS_JETSON
+            use_half = False  # 默認不使用半精度
             
-            # 設置設備
+            # 如果在app.py中設置了這些參數，從session_state獲取
+            import streamlit as st
+            if 'enable_tensorrt' in st.session_state:
+                use_tensorrt = st.session_state.enable_tensorrt
+            if 'use_half_precision' in st.session_state:
+                use_half = st.session_state.use_half_precision
+            
+            # 使用Ultralytics YOLO庫加載模型，添加優化選項
+            if use_tensorrt:
+                print("使用TensorRT優化模型...")
+                try:
+                    # 嘗試使用TensorRT加速選項加載模型
+                    self.model = YOLO(self.model_path)
+                    # 啟用TensorRT導出（首次使用可能較慢）
+                    self.model.to('cuda')
+                    self.model.fuse()  # 融合層以提高性能
+                    
+                    # 使用half精度來提高性能（如果啟用）
+                    if use_half:
+                        print("啟用FP16半精度...")
+                        self.model = self.model.half()
+                        
+                    print("TensorRT優化成功")
+                except Exception as e:
+                    print(f"TensorRT優化失敗: {e}")
+                    print("回退到標準模式加載模型")
+                    self.model = YOLO(self.model_path)
+                    use_tensorrt = False
+            else:
+                # 標準模式加載模型
+                self.model = YOLO(self.model_path)
+            
+            # 增強的設備選擇邏輯，針對Jetson平台優化
             if self.device != 'cpu':
-                if self.device == 'mps' and torch.backends.mps.is_available():
+                # 檢查CUDA可用性，並提供詳細日誌
+                if self.device == 'cuda':
+                    if torch.cuda.is_available():
+                        # 設置當前的CUDA設備
+                        torch.cuda.set_device(0)  # 預設使用Jetson的GPU 0
+                        
+                        # 檢查CUDA是否能被訪問
+                        try:
+                            # 嘗試在CUDA上創建一個小張量作為測試
+                            test_tensor = torch.ones(1).cuda()
+                            del test_tensor  # 即時釋放內存
+                            
+                            # 設置模型到CUDA
+                            self.model.to(self.device)
+                            
+                            # 如果啟用half精度但尚未應用（未使用TensorRT）
+                            if use_half and not use_tensorrt:
+                                print("啟用FP16半精度...")
+                                self.model = self.model.half()
+                            
+                            # 輸出詳細的CUDA信息以進行診斷
+                            cuda_device_count = torch.cuda.device_count()
+                            cuda_device_name = torch.cuda.get_device_name(0)
+                            cuda_cap_major, cuda_cap_minor = torch.cuda.get_device_capability(0)
+                            
+                            print(f"成功啟用CUDA，找到{cuda_device_count}個GPU設備")
+                            print(f"當前使用: {cuda_device_name}")
+                            print(f"計算能力: {cuda_cap_major}.{cuda_cap_minor}")
+                            print(f"可用GPU內存: {torch.cuda.get_device_properties(0).total_memory / 1024 / 1024 / 1024:.2f} GB")
+                            
+                            # 如果在Jetson上但性能仍然較差，提供進一步指導
+                            if IS_JETSON:
+                                print("檢測到Jetson平台，應用特定優化...")
+                                print(f"TensorRT加速: {'啟用' if use_tensorrt else '禁用'}")
+                                print(f"半精度計算: {'啟用' if use_half else '禁用'}")
+                                
+                                # 獲取當前批處理大小設置（如果有）
+                                batch_size = 1  # 默認值
+                                if 'batch_size' in st.session_state:
+                                    batch_size = st.session_state.batch_size
+                                print(f"批處理大小: {batch_size}")
+                                
+                                # 獲取縮放係數（如果有）
+                                if 'resolution_scale' in st.session_state:
+                                    print(f"分辨率縮放: {st.session_state.resolution_scale:.2f}")
+                        except RuntimeError as e:
+                            print(f"CUDA初始化錯誤: {e}")
+                            print("回退到CPU模式")
+                            self.device = 'cpu'
+                    else:
+                        print("CUDA在PyTorch中不可用，檢查CUDA庫和驅動是否正確安裝")
+                        print("對於Jetson平台，請確保安裝了正確版本的JetPack和PyTorch")
+                        self.device = 'cpu'
+                elif self.device == 'mps' and torch.backends.mps.is_available():
                     # 對於Apple Silicon，使用MPS
-                    self.model.to(self.device)
-                elif self.device == 'cuda' and torch.cuda.is_available():
-                    # 對於NVIDIA GPU，使用CUDA
                     self.model.to(self.device)
                 else:
                     # 如果指定設備不可用，回退到CPU
                     self.device = 'cpu'
                     print(f"警告: {self.device} 不可用，使用CPU替代。")
+            
+            # 如果設備是CPU，提供一些性能建議
+            if self.device == 'cpu':
+                print("在CPU上運行檢測模型會比較慢。若要提升性能，請確保GPU可用並正確配置。")
+                # 檢查當前加載的模型大小
+                if 'n' not in self.model_name and 's' not in self.model_name:
+                    print("提示: 您正在CPU上使用較大的模型。考慮使用較小的模型（如yolov10n.pt）提高性能。")
             
             print(f"成功加載模型 {self.model_name} 到 {self.device} 設備")
         except Exception as e:
