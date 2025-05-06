@@ -39,3 +39,6 @@ env/
 # 編輯器配置
 .vscode/
 .idea/
+
+# Cursor
+.cursor
