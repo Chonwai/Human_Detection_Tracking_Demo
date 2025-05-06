@@ -36,7 +36,7 @@ OUTPUT_DIR = DATA_DIR / "output"
 # 檢測配置
 DETECTION_CONF = 0.5  # 檢測置信度閾值
 DETECTION_IOU = 0.45  # NMS IOU閾值
-DETECTION_CLASSES = [0]  # 只檢測人類 (COCO類別)
+DETECTION_CLASSES = [0, 56]  # 更新：指定偵測人、椅子
 
 # 追蹤配置
 TRACKING_MAX_AGE = 30  # 最大追蹤幀數
