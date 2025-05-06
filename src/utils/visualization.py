@@ -130,25 +130,31 @@ def draw_tracks(
             if "bbox" in det:
                 x1, y1, x2, y2 = map(int, det["bbox"])
 
-                # 繪製傳統目標檢測框（綠色）
+                # 根據類別選擇顏色
+                class_id = det.get('class_id', -1) # 獲取類別ID，如果沒有則設為-1
+                current_color = PERSON_COLOR if class_id == 0 else OTHER_COLOR
+
+                # 繪製目標檢測框
                 if show_bbox:
                     # 繪製半透明背景框
                     overlay = output_frame.copy()
                     cv2.rectangle(
-                        overlay, (x1, y1), (x2, y2), (0, 200, 0), -1
-                    )  # 填充內部
+                        overlay, (x1, y1), (x2, y2), current_color, -1 # 使用 current_color
+                    )
                     output_frame = cv2.addWeighted(overlay, 0.2, output_frame, 0.8, 0)
 
                     # 繪製邊界框
-                    cv2.rectangle(output_frame, (x1, y1), (x2, y2), (0, 200, 0), 2)
+                    cv2.rectangle(output_frame, (x1, y1), (x2, y2), current_color, 2) # 使用 current_color
 
                 # 顯示類別標籤和置信度
                 label_text = ""
                 if "class_name" in det:
                     label_text = det["class_name"]
-                elif "class_id" in det:
-                    # 預設為人類
-                    label_text = "person"
+                elif class_id != -1: # 如果有 class_id 但沒有 name
+                    # 你可以在這裡添加一個從 COCO ID 到名稱的映射，以顯示更友好的名稱
+                    # 例如: coco_names = {0: "person", 1: "bicycle", ..., 56: "chair"}
+                    # label_text = coco_names.get(class_id, f"Class {class_id}")
+                    label_text = f"Class {class_id}" # 暫時先這樣顯示
 
                 if "confidence" in det:
                     conf = det["confidence"]
@@ -168,7 +174,7 @@ def draw_tracks(
                         output_frame,
                         (x1, y1 - label_size[1] - 5),
                         (x1 + label_size[0], y1),
-                        (0, 200, 0),
+                        current_color, # 使用 current_color
                         -1,
                     )
 
@@ -182,9 +188,6 @@ def draw_tracks(
                         (255, 255, 255),  # 白色文字
                         1,
                     )
-
-    # 使用單一顏色避免閃爍
-    single_color = (0, 200, 0)  # 綠色
 
     # 繪製有追蹤ID的結果
     for track in tracked:
