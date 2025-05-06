@@ -11,6 +11,9 @@ import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 import random
 
+# 定義顏色 (BGR)
+PERSON_COLOR = (0, 255, 0)  # 綠色，用於標註人
+OTHER_COLOR = (255, 0, 0)  # 藍色，用於標註其他所有物體
 
 def draw_detections(
     frame: np.ndarray,
@@ -186,6 +189,8 @@ def draw_tracks(
     # 繪製有追蹤ID的結果
     for track in tracked:
         track_id = track.get("track_id", -1)
+        class_id = track.get('class_id', -1) # 獲取追蹤目標的類別ID
+        current_color = PERSON_COLOR if class_id == 0 else OTHER_COLOR # 根據類別選擇顏色
 
         if "bbox" in track:
             x1, y1, x2, y2 = map(int, track["bbox"])
@@ -194,11 +199,11 @@ def draw_tracks(
             if show_bbox:
                 # 繪製半透明背景框
                 overlay = output_frame.copy()
-                cv2.rectangle(overlay, (x1, y1), (x2, y2), single_color, -1)  # 填充內部
+                cv2.rectangle(overlay, (x1, y1), (x2, y2), current_color, -1)  # 填充內部
                 output_frame = cv2.addWeighted(overlay, 0.2, output_frame, 0.8, 0)
 
                 # 繪製邊界框
-                cv2.rectangle(output_frame, (x1, y1), (x2, y2), single_color, 2)
+                cv2.rectangle(output_frame, (x1, y1), (x2, y2), current_color, 2)
 
             # 準備標籤文本
             label_parts = []
@@ -208,11 +213,11 @@ def draw_tracks(
                 label_parts.append("ID: " + str(track_id))
 
             # 添加類別標籤
-            if "class_name" in track:
-                label_parts.append(track["class_name"])
-            elif "class_id" in track:
-                # 預設為人類
-                label_parts.append("person")
+            class_name = track.get("class_name", "")
+            if not class_name and class_id != -1:
+                class_name = f"Class {class_id}" # 如果沒有名字但有ID
+            if class_name:
+                 label_parts.append(class_name)
 
             # 添加置信度
             if "confidence" in track:
@@ -232,7 +237,7 @@ def draw_tracks(
                     output_frame,
                     (x1, y1 - label_size[1] - 5),
                     (x1 + label_size[0], y1),
-                    single_color,
+                    current_color,
                     -1,
                 )
 
@@ -257,7 +262,7 @@ def draw_tracks(
                     # 繪製軌跡線段
                     p1 = track["trajectory"][i - 1]
                     p2 = track["trajectory"][i]
-                    cv2.line(output_frame, p1, p2, single_color, 2)
+                    cv2.line(output_frame, p1, p2, current_color, 2)
 
     return output_frame, id_colors
 
