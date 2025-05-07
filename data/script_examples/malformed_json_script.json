@@ -1,0 +1,16 @@
+[
+  {
+    "event_id": "MALFORMED001",
+    "description": "此事件後面有一個多餘的逗號，會導致JSON解析失敗",
+    "time_start": 0.0,
+    "time_end": 10.0,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": "==",
+      "value": 1
+    },
+    "predicted_cues": [
+      {"offset": 1.0, "cue_description": "Some Cue"}
+    ]
+  },
+] 
