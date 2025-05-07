@@ -1,0 +1,74 @@
+[
+  {
+    "event_id": "ERR001",
+    "description": "缺少 time_end，且 trigger_condition.value 為負數",
+    "time_start": 0,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": "==",
+      "value": -1
+    },
+    "predicted_cues": [
+      {"offset": 1.0, "cue_description": "Cue X"}
+    ]
+  },
+  {
+    "event_id": "ERR002",
+    "description": "time_start 大於 time_end，且 trigger_condition.operator 無效",
+    "time_start": 20.5,
+    "time_end": 10.2,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": "equals",
+      "value": 2
+    },
+    "predicted_cues": [
+      {"offset": 1.0, "cue_description": "Cue Y"}
+    ]
+  },
+  {
+    "event_id": "ERR003",
+    "description": "trigger_condition 缺少 type，predicted_cue offset 為負數，description 為空",
+    "time_start": 30.0,
+    "time_end": 40.0,
+    "trigger_condition": {
+      "operator": ">=",
+      "value": 1
+    },
+    "predicted_cues": [
+      {
+        "offset": -2.0,
+        "cue_description": "  "
+      },
+      {
+        "cue_description": "Valid Description But Missing Offset"
+      }
+    ]
+  },
+  {
+    "event_id": "ERR004",
+    "description": "trigger_condition.type 無效，predicted_cues 不是列表",
+    "time_start": 50.0,
+    "time_end": 60.0,
+    "trigger_condition": {
+      "type": "actor_name",
+      "operator": "==",
+      "value": 1
+    },
+    "predicted_cues": {"offset": 1.0, "cue_description": "Not a list"}
+  },
+  {
+    "event_id": "ERR005",
+    "description": "predicted_cues 中的 cue 不是字典",
+    "time_start": 70.0,
+    "time_end": 80.0,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": "<",
+      "value": 3
+    },
+    "predicted_cues": [
+      "Just a string, not a cue object"
+    ]
+  }
+] 

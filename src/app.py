@@ -31,6 +31,7 @@ from utils.visualization import (
 )
 from utils.image_enhancement import enhance_image, apply_histogram_equalization
 from core.platform_utils import is_jetson, is_mac, get_platform_info
+from utils.script_handler import load_script_from_uploaded_file
 
 # 設置頁面配置
 st.set_page_config(
@@ -89,6 +90,18 @@ if "processing_continuity" not in st.session_state:
         "detector": None,               # 保存的檢測器對象
         "tracker": None                 # 保存的追蹤器對象
     }
+
+# 新增劇本相關的會話狀態初始化
+if "script_file_name" not in st.session_state:
+    st.session_state.script_file_name = None
+if "parsed_script" not in st.session_state:
+    st.session_state.parsed_script = None
+if "script_error_message" not in st.session_state:
+    st.session_state.script_error_message = None
+if "last_script_load_success" not in st.session_state:
+    st.session_state.last_script_load_success = False
+if "active_display_cues" not in st.session_state: # 用於存儲當前幀要顯示的 cues
+    st.session_state.active_display_cues = []
 
 def main():
     """
@@ -740,6 +753,50 @@ def main():
                 st.session_state.processing = False
                 st.rerun()
 
+        with st.sidebar.expander("📝 劇本與提示設定", expanded=True):
+            # 使用唯一的 key "script_uploader"
+            uploaded_script_file = st.file_uploader("上傳劇本 JSON 檔案", type=["json"], key="script_uploader_key")
+
+            if uploaded_script_file is not None:
+                # 檢查是否是同一個檔案的重複處理 (可選優化，如果沒有按鈕觸發的話)
+                # if st.session_state.get("script_file_name") != uploaded_script_file.name or not st.session_state.get("last_script_load_success"):
+                
+                logger.info(f"偵測到上傳的劇本檔案: {uploaded_script_file.name}")
+                # 注意：UploadedFile 對象在 rerun 後可能會重置或行為不一致，
+                # 理想情況下，應該在它首次出現時處理，然後依賴 session_state。
+                # 為了簡化，這裡每次 rerender 且 file_uploader 有值時都可能重新處理，
+                # 這在 Streamlit 中是常見模式，但若劇本大或處理耗時，需優化。
+                # 假設 load_script_from_uploaded_file 接受 file-like object
+                
+                # 創建一個臨時副本以避免 "read of closed file" 錯誤，如果 load_script... 多次讀取
+                # from io import BytesIO
+                # file_buffer = BytesIO(uploaded_script_file.getvalue())
+                # setattr(file_buffer, 'name', uploaded_script_file.name)
+                # parsed_data, error_msg = load_script_from_uploaded_file(file_buffer)
+                
+                # 直接傳遞 uploaded_file_obj, script_handler 應處理它
+                parsed_data, error_msg = load_script_from_uploaded_file(uploaded_script_file)
+
+                st.session_state.parsed_script = parsed_data
+                st.session_state.script_error_message = error_msg
+                st.session_state.script_file_name = uploaded_script_file.name
+                if parsed_data:
+                    st.session_state.last_script_load_success = True
+                    logger.info(f"劇本 '{uploaded_script_file.name}' 成功載入。")
+                else:
+                    st.session_state.last_script_load_success = False
+                    logger.error(f"劇本 '{uploaded_script_file.name}' 載入失敗: {error_msg}")
+                    
+            # 在 uploader下方顯示載入狀態 (仍在 expander 內)
+            if st.session_state.get('script_file_name'):
+                if st.session_state.get('last_script_load_success'):
+                    st.success(f"劇本 '{st.session_state.script_file_name}' 已成功載入。")
+                elif st.session_state.get('script_error_message'):
+                    # 使用 st.warning 或 st.error，並確保訊息換行正確顯示
+                    st.error(f"載入劇本 '{st.session_state.script_file_name}' 失敗:\\n{st.session_state.script_error_message}")
+            else:
+                st.info("請上傳劇本檔案以啟用智慧提示功能。")
+
     # 主界面
     # 分為兩列：左側視頻顯示，右側統計信息
     col1, col2 = st.columns([4, 1])  # 修改比例讓視頻區域更寬
@@ -776,6 +833,9 @@ def main():
         if tracking_enabled:
             st.subheader("軌跡分析")
             track_chart = st.empty()
+        
+        st.subheader("💡 智慧提示") # 在右側欄的統計信息下方添加
+        cues_display_container = st.empty() # 使用 empty() 或 container()
         
     # 初始顯示統計資訊和圖表
     update_stats_display(stats_container, tracking_enabled)
@@ -1152,6 +1212,106 @@ def main():
                     heatmap_placeholder.image(
                         overlay, channels="BGR", use_container_width=True
                     )
+
+                # --------------------------------------------------------------------
+                # 智慧提示系統 - 核心邏輯整合點 (階段 1 和 後續階段2)
+                # --------------------------------------------------------------------
+                parsed_script_data = st.session_state.get('parsed_script')
+                script_loaded_successfully = st.session_state.get('last_script_load_success', False)
+                current_display_cues = [] # 本幀要顯示的cues
+
+                if script_loaded_successfully and parsed_script_data:
+                    # logger.debug(f"Script loaded. Timestamp: {timestamp}, Person Count: {person_count}")
+                    # 階段 2 的核心匹配邏輯將在此處實現
+                    # 現在是臨時佔位/初步測試邏輯：
+                    for event in parsed_script_data:
+                        event_time_start = event.get('time_start', float('inf'))
+                        event_time_end = event.get('time_end', float('-inf'))
+                        
+                        # 時間匹配
+                        if timestamp >= event_time_start and timestamp < event_time_end:
+                            condition = event.get('trigger_condition', {})
+                            cond_type = condition.get('type')
+                            cond_op = condition.get('operator')
+                            cond_val = condition.get('value')
+
+                            # 人數條件匹配 (簡化版，後續階段會用 _check_trigger_condition 輔助函數)
+                            event_triggered_by_person_count = False
+                            if cond_type == 'person_count':
+                                if cond_op == '==' and person_count == cond_val:
+                                    event_triggered_by_person_count = True
+                                elif cond_op == '>=' and person_count >= cond_val:
+                                    event_triggered_by_person_count = True
+                                elif cond_op == '<=' and person_count <= cond_val:
+                                    event_triggered_by_person_count = True
+                                elif cond_op == '>' and person_count > cond_val:
+                                    event_triggered_by_person_count = True
+                                elif cond_op == '<' and person_count < cond_val:
+                                    event_triggered_by_person_count = True
+                            
+                            if event_triggered_by_person_count:
+                                # logger.info(f"Event '{event.get('event_id', 'N/A')}' triggered at {timestamp:.2f}s with {person_count} people.")
+                                for cue_obj in event.get('predicted_cues', []):
+                                    # 階段 3 將會更詳細地處理 offset 和顯示格式
+                                    # 目前只做簡單顯示
+                                    cue_desc = cue_obj.get('cue_description', 'N/A')
+                                    cue_offset = cue_obj.get('offset', 0)
+                                    current_display_cues.append(
+                                        f"事件 '{event.get('event_id', event.get('description', 'N/A')[:15])}': "
+                                        f"預計 {cue_offset:.1f}s 後觸發 '{cue_desc[:30]}...' (觸發於 {timestamp:.1f}s, 人數 {person_count})"
+                                    )
+                
+                # 更新 session_state 中的 active_display_cues，以便UI部分讀取
+                st.session_state.active_display_cues = current_display_cues
+                # --------------------------------------------------------------------
+                # 智慧提示系統 - 邏輯結束
+                # --------------------------------------------------------------------
+
+                # 更新智慧提示UI (每一輪 UI 更新都會執行)
+                # 這個位置要確保 cues_display_container 已經被定義 (即在 col2 中)
+                # 並且 st.session_state.active_display_cues 已經被視訊處理迴圈更新
+                
+                # 這段邏輯應該放在主函數作用域下，確保每次streamlit rerun時都會更新提示區域
+                # 但它依賴於 video_frame_generator 循環內部對 st.session_state.active_display_cues 的更新
+                
+                _active_cues_to_show = st.session_state.get('active_display_cues', [])
+                _script_is_loaded = st.session_state.get('last_script_load_success', False)
+                _parsed_script_exists = st.session_state.get('parsed_script') is not None
+                _script_file_attempted = st.session_state.get('script_file_name') is not None
+
+                # 更新 cues_display_container 的內容
+                # 注意：cues_display_container 的定義需要在這段代碼執行前
+                # 通常它在 st.columns 分配的列中定義 st.empty()
+                
+                # 我們將這段更新邏輯移到 col2 初始化 cues_display_container 之後，確保它每次都能更新
+                # （實際上，Streamlit 的 st.empty() 或 st.container() 內容更新應該在其定義的列/塊內）
+                # 因此，這段更新顯示的邏輯，正確的位置是在定義了 cues_display_container 之後，
+                # 並且能夠訪問到 st.session_state.active_display_cues 的最新值。
+                # 在 Streamlit 的執行模型中，腳本從頭到尾執行，所以可以放在定義 col2 之後的任何地方，
+                # 或者，如果 cues_display_container 是在 col2 中，那麼就在 col2 的 with 塊中更新。
+
+                # 已將 cues_display_container 的更新邏輯放置在 col2 的 st.subheader("💡 智慧提示") 之後
+                # 以下是該更新邏輯的精煉版本，應放置在 `with col2:` 塊的末尾，或緊隨 `cues_display_container = st.empty()` 之後
+
+                # (在 with col2: 內部，緊隨 cues_display_container = st.empty() 之後)
+                # 這段代碼會被執行，前提是 st.session_state.active_display_cues 被主循環更新了
+                # logger.debug(f"Updating cues display. Active cues: {st.session_state.get('active_display_cues')}")
+                if _script_is_loaded and _parsed_script_exists:
+                    if _active_cues_to_show:
+                        cues_text_md = "\\n".join([f"- {cue_str}" for cue_str in _active_cues_to_show])
+                        cues_display_container.markdown(f"**預測的技術提示:**\\n{cues_text_md}")
+                    else:
+                        # 只有在視頻處理中（st.session_state.processing 為 True）且沒有 cues 時，才顯示 "目前無提示"
+                        # 否則在視頻未開始時，這個訊息也可能出現
+                        if st.session_state.get("processing", False):
+                             cues_display_container.info("目前無進行中的預測技術提示。")
+                        else:
+                             cues_display_container.info("開始視頻處理以查看提示。")
+                elif _script_file_attempted and not _script_is_loaded: # 嘗試過載入但失敗
+                    # 錯誤訊息已在側邊欄顯示，這裡可以不重複或顯示簡短提示
+                    cues_display_container.warning("劇本載入失敗，無法提供提示。請檢查側邊欄錯誤訊息。")
+                else: # 從未嘗試載入劇本
+                    cues_display_container.info("請在側邊欄上傳劇本檔案以啟用智慧提示。")
 
             # 處理完成
             st.session_state.processing = False

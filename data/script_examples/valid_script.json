@@ -1,0 +1,55 @@
+[
+  {
+    "event_id": "EVT001",
+    "description": "開場 - 單人演講",
+    "time_start": 0.0,
+    "time_end": 60.5,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": "==",
+      "value": 1
+    },
+    "predicted_cues": [
+      { 
+        "offset": 5.0, 
+        "cue_description": "LX Cue 1: 主講人追光亮起 @ 80%" 
+      },
+      { 
+        "offset": 10.2, 
+        "cue_description": "SFX Cue A: 背景輕音樂淡入"
+      }
+    ]
+  },
+  {
+    "event_id": "EVT002",
+    "description": "互動環節 - 至少兩人",
+    "time_start": 60.5,
+    "time_end": 120.0,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": ">=",
+      "value": 2
+    },
+    "predicted_cues": [
+      { 
+        "offset": 3.0, 
+        "cue_description": "LX Cue 5: 舞台全亮" 
+      },
+      { 
+        "offset": 3.0, 
+        "cue_description": "MIC Cue 2: 開啟手持麥克風" 
+      }
+    ]
+  },
+  {
+    "description": "結束場景 - 允許空列表的predicted_cues",
+    "time_start": 120.0,
+    "time_end": 150.0,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": "<=",
+      "value": 5 
+    },
+    "predicted_cues": []
+  }
+] 

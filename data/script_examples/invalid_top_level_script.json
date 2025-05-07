@@ -1,0 +1,13 @@
+{
+  "error": "This script is a dictionary at the top level, not a list.",
+  "event_id": "TOPLEVEL_ERR",
+  "description": "This should not pass validation.",
+  "time_start": 0.0,
+  "time_end": 10.0,
+  "trigger_condition": {
+    "type": "person_count",
+    "operator": "==",
+    "value": 1
+  },
+  "predicted_cues": []
+} 
