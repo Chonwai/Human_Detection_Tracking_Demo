@@ -13,7 +13,8 @@ logging.basicConfig(level=logging.INFO) # 臨時基本配置
 
 # 預期的操作符列表
 VALID_OPERATORS = ['==', '>=', '<=', '>', '<']
-VALID_TRIGGER_TYPES = ['person_count']
+VALID_TRIGGER_TYPES = ['person_count', 'object_conditions']
+VALID_OVERALL_LOGIC = ['AND', 'OR']
 # 可選：預期的 Cue 分類 (如果設計中包含)
 # VALID_CUE_CATEGORIES = ['Lighting', 'Sound', 'Video', 'General']
 
@@ -68,22 +69,67 @@ def _validate_script_format(script_data: List[Dict[str, Any]], script_source_nam
         if not isinstance(trigger_condition, dict):
             errors.append(f"{event_identifier}: 'trigger_condition' 應為一個字典 (dict)，但得到的是 '{trigger_condition}' (類型: {type(trigger_condition).__name__})。")
         else:
-            trigger_req_fields = ['type', 'operator', 'value']
-            for field in trigger_req_fields:
-                if field not in trigger_condition:
-                    errors.append(f"{event_identifier}: 'trigger_condition' 中缺少必要欄位 '{field}'。")
-            
             trigger_type = trigger_condition.get('type')
+
             if trigger_type not in VALID_TRIGGER_TYPES:
                 errors.append(f"{event_identifier}: 'trigger_condition.type' 的值 '{trigger_type}' 無效。有效值為: {VALID_TRIGGER_TYPES}。")
             
-            operator = trigger_condition.get('operator')
-            if operator not in VALID_OPERATORS:
-                errors.append(f"{event_identifier}: 'trigger_condition.operator' 的值 '{operator}' 無效。有效值為: {VALID_OPERATORS}。")
+            if trigger_type == 'person_count':
+                # 舊的 'person_count' 類型驗證邏輯
+                trigger_req_fields_person_count = ['operator', 'value']
+                for field in trigger_req_fields_person_count:
+                    if field not in trigger_condition:
+                        errors.append(f"{event_identifier}: 'trigger_condition' (類型: person_count) 中缺少必要欄位 '{field}'。")
+                
+                operator = trigger_condition.get('operator')
+                if operator not in VALID_OPERATORS:
+                    errors.append(f"{event_identifier}: 'trigger_condition.operator' (類型: person_count) 的值 '{operator}' 無效。有效值為: {VALID_OPERATORS}。")
 
-            value = trigger_condition.get('value')
-            if not isinstance(value, int) or value < 0: # 通常人數不能為負
-                errors.append(f"{event_identifier}: 'trigger_condition.value' 應為非負整數，但得到的是 '{value}' (類型: {type(value).__name__})。")
+                value = trigger_condition.get('value')
+                if not isinstance(value, int) or value < 0:
+                    errors.append(f"{event_identifier}: 'trigger_condition.value' (類型: person_count) 應為非負整數，但得到的是 '{value}' (類型: {type(value).__name__})。")
+
+            elif trigger_type == 'object_conditions':
+                # 新的 'object_conditions' 類型驗證邏輯
+                trigger_req_fields_object_conditions = ['conditions', 'overall_logic']
+                for field in trigger_req_fields_object_conditions:
+                    if field not in trigger_condition:
+                        errors.append(f"{event_identifier}: 'trigger_condition' (類型: object_conditions) 中缺少必要欄位 '{field}'。")
+
+                conditions_list = trigger_condition.get('conditions')
+                if not isinstance(conditions_list, list):
+                    errors.append(f"{event_identifier}: 'trigger_condition.conditions' (類型: object_conditions) 應為一個列表 (list)，但得到的是 '{conditions_list}' (類型: {type(conditions_list).__name__})。")
+                elif not conditions_list: # 檢查列表是否為空
+                    errors.append(f"{event_identifier}: 'trigger_condition.conditions' (類型: object_conditions) 列表不能為空。")
+                else:
+                    for i_cond, cond_item in enumerate(conditions_list):
+                        cond_identifier = f"{event_identifier} 中 'trigger_condition.conditions' 的第 {i_cond+1} 個條件"
+                        if not isinstance(cond_item, dict):
+                            errors.append(f"{cond_identifier}: 必須是一個字典 (dict)，但得到的是 {type(cond_item).__name__}。")
+                            continue 
+                        
+                        cond_req_fields = ['class_name', 'operator', 'value']
+                        for field in cond_req_fields:
+                            if field not in cond_item:
+                                errors.append(f"{cond_identifier}: 缺少必要欄位 '{field}'。")
+                        
+                        class_name = cond_item.get('class_name')
+                        if not isinstance(class_name, str) or not class_name.strip():
+                             errors.append(f"{cond_identifier}: 'class_name' 應為非空字串，但得到的是 '{class_name}' (類型: {type(class_name).__name__})。")
+
+                        operator = cond_item.get('operator')
+                        if operator not in VALID_OPERATORS:
+                            errors.append(f"{cond_identifier}: 'operator' 的值 '{operator}' 無效。有效值為: {VALID_OPERATORS}。")
+
+                        value = cond_item.get('value')
+                        if not isinstance(value, int) or value < 0:
+                            errors.append(f"{cond_identifier}: 'value' 應為非負整數，但得到的是 '{value}' (類型: {type(value).__name__})。")
+                
+                overall_logic = trigger_condition.get('overall_logic')
+                if not isinstance(overall_logic, str) or overall_logic.upper() not in VALID_OVERALL_LOGIC:
+                    errors.append(f"{event_identifier}: 'trigger_condition.overall_logic' (類型: object_conditions) 的值 '{overall_logic}' 無效。有效值為: {VALID_OVERALL_LOGIC}。")
+            # 如果 type 有效但在上面沒有匹配的 if/elif，則不執行特定結構的驗證，僅類型檢查已完成
+            # 例如，如果未來添加更多 trigger_type，可以在這裡添加 elif
 
         # predicted_cues
         predicted_cues = event.get('predicted_cues')

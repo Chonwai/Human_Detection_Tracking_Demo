@@ -5,9 +5,11 @@
     "time_start": 0.0,
     "time_end": 60.5,
     "trigger_condition": {
-      "type": "person_count",
-      "operator": "==",
-      "value": 1
+      "type": "object_conditions",
+      "conditions": [
+        { "class_name": "person", "operator": "==", "value": 1 }
+      ],
+      "overall_logic": "AND"
     },
     "predicted_cues": [
       { 
@@ -26,9 +28,11 @@
     "time_start": 60.5,
     "time_end": 120.0,
     "trigger_condition": {
-      "type": "person_count",
-      "operator": ">=",
-      "value": 2
+      "type": "object_conditions",
+      "conditions": [
+        { "class_name": "person", "operator": ">=", "value": 2 }
+      ],
+      "overall_logic": "AND"
     },
     "predicted_cues": [
       { 
@@ -43,12 +47,15 @@
   },
   {
     "description": "結束場景 - 允許空列表的predicted_cues",
+    "event_id": "EVT003_EMPTY_CUES",
     "time_start": 120.0,
     "time_end": 150.0,
     "trigger_condition": {
-      "type": "person_count",
-      "operator": "<=",
-      "value": 5 
+      "type": "object_conditions",
+      "conditions": [
+        { "class_name": "person", "operator": "<=", "value": 5 }
+      ],
+      "overall_logic": "AND"
     },
     "predicted_cues": []
   }
