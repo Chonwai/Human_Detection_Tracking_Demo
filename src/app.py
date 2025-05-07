@@ -1246,26 +1246,14 @@ def main():
                 current_display_cues = [] # 本幀最終要顯示的 cues 字符串列表
 
                 if script_loaded_successfully and parsed_script_data:
+                    # 新增：計算當前幀檢測到的各類別物體數量
+                    detected_object_counts = {}
+                    for det in detections: # 'detections' 來自 detector.detect(frame)
+                        class_name = det.get("class_name", "unknown")
+                        detected_object_counts[class_name] = detected_object_counts.get(class_name, 0) + 1
                     
-                    person_count_for_script = 0
-                    local_person_count = locals().get('person_count', -1) 
-                    local_track_count = locals().get('track_count', -1)   
-                    
-                    if tracking_enabled and tracker is not None and local_track_count != -1:
-                        person_count_for_script = local_track_count 
-                    elif local_person_count != -1:
-                        person_count_for_script = local_person_count
-                    else:
-                        logger.warning("Could not determine person count for script matching (person_count or track_count not defined).")
-                        person_count_for_script = 0 
+                    logger.debug(f"[Cue Check] Timestamp: {timestamp:.2f}, Detected Counts: {detected_object_counts}")
 
-                    # --- 添加診斷日誌 ---
-                    logger.debug(f"[Cue Check] Timestamp: {timestamp:.2f}, "
-                                 f"Detected Persons (person_count): {local_person_count}, "
-                                 f"Tracked IDs (track_count): {local_track_count}, "
-                                 f"Using Count for Script: {person_count_for_script}")
-                    # --- 診斷日誌結束 ---
-                    
                     triggered_events_this_frame: List[Dict[str, Any]] = []
                     for event in parsed_script_data:
                         event_id_for_log = event.get('event_id', 'N/A')
@@ -1275,27 +1263,63 @@ def main():
                         time_match = timestamp >= event_time_start and timestamp < event_time_end
                         
                         if time_match:
-                            condition = event.get('trigger_condition', {})
-                            cond_type = condition.get('type')
-                            cond_op = condition.get('operator')
-                            cond_val = condition.get('value') 
-
+                            trigger_condition_config = event.get('trigger_condition', {})
+                            cond_type = trigger_condition_config.get('type')
+                            
                             event_triggered = False
-                            if cond_type == 'person_count':
-                                if cond_op is not None and cond_val is not None:
-                                    condition_met = _check_trigger_condition(person_count_for_script, cond_op, cond_val)
-                                    logger.debug(f"[Cue Check] Event '{event_id_for_log}': Time OK. Condition Check: "
-                                                 f"_check_trigger_condition({person_count_for_script}, '{cond_op}', {cond_val}) -> {condition_met}")
-                                    if condition_met:
-                                        event_triggered = True
+                            if cond_type == 'object_conditions':
+                                individual_condition_results = []
+                                conditions_to_check = trigger_condition_config.get('conditions', [])
+                                overall_logic = trigger_condition_config.get('overall_logic', 'AND').upper()
+
+                                if not conditions_to_check:
+                                    logger.warning(f"事件 '{event_id_for_log}' 的 object_conditions 為空列表，視為不觸發。")
+                                    event_triggered = False
                                 else:
-                                    logger.warning(f"事件 '{event_id_for_log}' 的 trigger_condition operator 或 value 為空。跳過。")
-                            elif cond_type is not None: 
-                                logger.debug(f"事件 '{event_id_for_log}' 的觸發類型 '{cond_type}' 尚不支援。")
+                                    for obj_cond in conditions_to_check:
+                                        class_name_to_check = obj_cond.get('class_name')
+                                        op = obj_cond.get('operator')
+                                        val = obj_cond.get('value')
+                                        
+                                        if class_name_to_check and op and val is not None:
+                                            current_class_count = detected_object_counts.get(class_name_to_check, 0)
+                                            condition_met = _check_trigger_condition(current_class_count, op, val)
+                                            individual_condition_results.append(condition_met)
+                                            logger.debug(f"[Cue Check] Event '{event_id_for_log}', ObjCond: {class_name_to_check} {op} {val}? Current: {current_class_count} -> {condition_met}")
+                                        else:
+                                            logger.warning(f"事件 '{event_id_for_log}' 的 object_conditions 中的條件不完整: {obj_cond}。該條件視為 False。")
+                                            individual_condition_results.append(False)
+                                    
+                                    if individual_condition_results: # 確保列表不為空
+                                        if overall_logic == 'AND':
+                                            event_triggered = all(individual_condition_results)
+                                        elif overall_logic == 'OR':
+                                            event_triggered = any(individual_condition_results)
+                                        else:
+                                            logger.warning(f"事件 '{event_id_for_log}' 的 overall_logic ('{overall_logic}') 無效，默認為 AND。")
+                                            event_triggered = all(individual_condition_results)
+                                    else: # 如果 conditions_to_check 為空或所有條件都無效
+                                        event_triggered = False 
+                                
+                                logger.debug(f"[Cue Check] Event '{event_id_for_log}', Type: object_conditions, OverallMet: {event_triggered}")
+
+                            elif cond_type == 'person_count': # 處理舊的 person_count 類型，將其視為 object_conditions 的特例
+                                op = trigger_condition_config.get('operator')
+                                val = trigger_condition_config.get('value')
+                                if op and val is not None:
+                                    current_person_count = detected_object_counts.get("person", 0)
+                                    event_triggered = _check_trigger_condition(current_person_count, op, val)
+                                    logger.debug(f"[Cue Check] Event '{event_id_for_log}', Type: person_count (compat), person {op} {val}? Current: {current_person_count} -> {event_triggered}")
+                                else:
+                                    logger.warning(f"事件 '{event_id_for_log}' 的 person_count operator 或 value 為空。跳過。")
+                            
+                            elif cond_type is None:
+                                logger.warning(f"事件 '{event_id_for_log}' 未定義 trigger_condition type，視為不觸發。")
+                            else: 
+                                logger.warning(f"事件 '{event_id_for_log}' 的觸發類型 '{cond_type}' 尚不支援。")
                             
                             if event_triggered:
-                                logger.info(f"事件 '{event.get('event_id', event.get('description', 'N/A')[:20])}' "
-                                            f"在 {timestamp:.2f}s (人數: {person_count_for_script}) 時觸發條件滿足。")
+                                logger.info(f"事件 '{event.get('event_id', event.get('description', 'N/A')[:20])}' 在 {timestamp:.2f}s 時觸發條件滿足。")
                                 triggered_events_this_frame.append({
                                     "source_event_id": event.get("event_id"),
                                     "source_event_description": event.get("description"),
