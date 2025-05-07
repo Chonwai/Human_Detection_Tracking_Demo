@@ -817,7 +817,12 @@ def main():
 
     # 右側統計區域 - 初始化右側UI元素
     with col2:
-        st.subheader("即時統計")
+        # --- UI 位置調整：將智慧提示移到最上方 ---
+        st.subheader("💡 智慧提示") 
+        cues_display_container = st.empty() 
+        # --- UI 位置調整結束 ---
+
+        st.subheader("📊 即時統計") # 原來的即時統計現在在提示下方
         
         # 創建空容器用於實時更新統計數據
         stats_container = st.empty()  # 更新變數名稱，避免混淆
@@ -830,13 +835,33 @@ def main():
         fps_chart = st.empty()
         
         # 僅當啟用追蹤時創建軌跡分析圖表容器
-        if tracking_enabled:
-            st.subheader("軌跡分析")
-            track_chart = st.empty()
-        
-        st.subheader("💡 智慧提示") # 在右側欄的統計信息下方添加
-        cues_display_container = st.empty() # 使用 empty() 或 container()
-        
+        # if tracking_enabled: # tracking_enabled 可能在此處尚未定義，先註釋掉
+        #     st.subheader("軌跡分析")
+        #     track_chart = st.empty()
+        # --- UI 更新邏輯 --- 
+        # (這段更新邏輯需要放在 col2 with 塊的末尾或其他地方，
+        #  確保 st.session_state.active_display_cues 已被主循環更新)
+        #  為了應用修改，我暫時把它放在這裡，但執行時可能需要調整
+        _active_cues_to_show = st.session_state.get('active_display_cues', [])
+        _script_is_loaded = st.session_state.get('last_script_load_success', False)
+        _parsed_script_exists = st.session_state.get('parsed_script') is not None
+        _script_file_attempted = st.session_state.get('script_file_name') is not None
+
+        if _script_is_loaded and _parsed_script_exists:
+            if _active_cues_to_show:
+                cues_text_md = "\\n".join([f"- {cue_str}" for cue_str in _active_cues_to_show])
+                cues_display_container.markdown(f"**預測的技術提示:**\\n{cues_text_md}") 
+            else:
+                if st.session_state.get("processing", False):
+                     cues_display_container.info("目前無進行中的預測技術提示。")
+                else:
+                     cues_display_container.info("開始視頻處理以查看提示。")
+        elif _script_file_attempted and not _script_is_loaded: 
+            cues_display_container.warning("劇本載入失敗，無法提供提示。請檢查側邊欄錯誤訊息。")
+        else: 
+            cues_display_container.info("請在側邊欄上傳劇本檔案以啟用智慧提示。")
+        # --- UI 更新邏輯結束 ---
+
     # 初始顯示統計資訊和圖表
     update_stats_display(stats_container, tracking_enabled)
     update_trend_charts(trend_chart, fps_chart, track_chart, tracking_enabled)
@@ -1214,104 +1239,93 @@ def main():
                     )
 
                 # --------------------------------------------------------------------
-                # 智慧提示系統 - 核心邏輯整合點 (階段 1 和 後續階段2)
+                # 智慧提示系統 - 核心邏輯整合點 (階段 2 更新 + 診斷日誌)
                 # --------------------------------------------------------------------
                 parsed_script_data = st.session_state.get('parsed_script')
                 script_loaded_successfully = st.session_state.get('last_script_load_success', False)
-                current_display_cues = [] # 本幀要顯示的cues
+                current_display_cues = [] # 本幀最終要顯示的 cues 字符串列表
 
                 if script_loaded_successfully and parsed_script_data:
-                    # logger.debug(f"Script loaded. Timestamp: {timestamp}, Person Count: {person_count}")
-                    # 階段 2 的核心匹配邏輯將在此處實現
-                    # 現在是臨時佔位/初步測試邏輯：
+                    
+                    person_count_for_script = 0
+                    local_person_count = locals().get('person_count', -1) 
+                    local_track_count = locals().get('track_count', -1)   
+                    
+                    if tracking_enabled and tracker is not None and local_track_count != -1:
+                        person_count_for_script = local_track_count 
+                    elif local_person_count != -1:
+                        person_count_for_script = local_person_count
+                    else:
+                        logger.warning("Could not determine person count for script matching (person_count or track_count not defined).")
+                        person_count_for_script = 0 
+
+                    # --- 添加診斷日誌 ---
+                    logger.debug(f"[Cue Check] Timestamp: {timestamp:.2f}, "
+                                 f"Detected Persons (person_count): {local_person_count}, "
+                                 f"Tracked IDs (track_count): {local_track_count}, "
+                                 f"Using Count for Script: {person_count_for_script}")
+                    # --- 診斷日誌結束 ---
+                    
+                    triggered_events_this_frame: List[Dict[str, Any]] = []
                     for event in parsed_script_data:
+                        event_id_for_log = event.get('event_id', 'N/A')
                         event_time_start = event.get('time_start', float('inf'))
                         event_time_end = event.get('time_end', float('-inf'))
                         
-                        # 時間匹配
-                        if timestamp >= event_time_start and timestamp < event_time_end:
+                        time_match = timestamp >= event_time_start and timestamp < event_time_end
+                        
+                        if time_match:
                             condition = event.get('trigger_condition', {})
                             cond_type = condition.get('type')
                             cond_op = condition.get('operator')
-                            cond_val = condition.get('value')
+                            cond_val = condition.get('value') 
 
-                            # 人數條件匹配 (簡化版，後續階段會用 _check_trigger_condition 輔助函數)
-                            event_triggered_by_person_count = False
+                            event_triggered = False
                             if cond_type == 'person_count':
-                                if cond_op == '==' and person_count == cond_val:
-                                    event_triggered_by_person_count = True
-                                elif cond_op == '>=' and person_count >= cond_val:
-                                    event_triggered_by_person_count = True
-                                elif cond_op == '<=' and person_count <= cond_val:
-                                    event_triggered_by_person_count = True
-                                elif cond_op == '>' and person_count > cond_val:
-                                    event_triggered_by_person_count = True
-                                elif cond_op == '<' and person_count < cond_val:
-                                    event_triggered_by_person_count = True
+                                if cond_op is not None and cond_val is not None:
+                                    condition_met = _check_trigger_condition(person_count_for_script, cond_op, cond_val)
+                                    logger.debug(f"[Cue Check] Event '{event_id_for_log}': Time OK. Condition Check: "
+                                                 f"_check_trigger_condition({person_count_for_script}, '{cond_op}', {cond_val}) -> {condition_met}")
+                                    if condition_met:
+                                        event_triggered = True
+                                else:
+                                    logger.warning(f"事件 '{event_id_for_log}' 的 trigger_condition operator 或 value 為空。跳過。")
+                            elif cond_type is not None: 
+                                logger.debug(f"事件 '{event_id_for_log}' 的觸發類型 '{cond_type}' 尚不支援。")
                             
-                            if event_triggered_by_person_count:
-                                # logger.info(f"Event '{event.get('event_id', 'N/A')}' triggered at {timestamp:.2f}s with {person_count} people.")
-                                for cue_obj in event.get('predicted_cues', []):
-                                    # 階段 3 將會更詳細地處理 offset 和顯示格式
-                                    # 目前只做簡單顯示
-                                    cue_desc = cue_obj.get('cue_description', 'N/A')
-                                    cue_offset = cue_obj.get('offset', 0)
-                                    current_display_cues.append(
-                                        f"事件 '{event.get('event_id', event.get('description', 'N/A')[:15])}': "
-                                        f"預計 {cue_offset:.1f}s 後觸發 '{cue_desc[:30]}...' (觸發於 {timestamp:.1f}s, 人數 {person_count})"
-                                    )
-                
-                # 更新 session_state 中的 active_display_cues，以便UI部分讀取
+                            if event_triggered:
+                                logger.info(f"事件 '{event.get('event_id', event.get('description', 'N/A')[:20])}' "
+                                            f"在 {timestamp:.2f}s (人數: {person_count_for_script}) 時觸發條件滿足。")
+                                triggered_events_this_frame.append({
+                                    "source_event_id": event.get("event_id"),
+                                    "source_event_description": event.get("description"),
+                                    "activation_timestamp": timestamp, 
+                                    "predicted_cues_list": event.get("predicted_cues", []) 
+                                })
+                        # else:
+                        #     logger.debug(f"[Cue Check] Event '{event_id_for_log}': Time NOT OK ({timestamp:.2f} not in [{event_time_start}, {event_time_end}))")
+                    
+                    for triggered_event_info in triggered_events_this_frame:
+                        event_desc_for_log = triggered_event_info.get('source_event_id', 
+                                                                   triggered_event_info.get('source_event_description', 'N/A'))
+                        if isinstance(event_desc_for_log, str): 
+                            event_desc_for_log = event_desc_for_log[:25]
+
+                        activation_ts = triggered_event_info["activation_timestamp"]
+                        
+                        for cue_obj in triggered_event_info["predicted_cues_list"]:
+                            cue_desc = cue_obj.get('cue_description', 'N/A')
+                            cue_offset = cue_obj.get('offset', 0) 
+                            
+                            current_display_cues.append(
+                                f"事件'{event_desc_for_log}': "
+                                f"預計 {cue_offset:.1f}s 後 \"{cue_desc[:30]}...\" (觸發於 {activation_ts:.1f}s)"
+                            )
+
                 st.session_state.active_display_cues = current_display_cues
                 # --------------------------------------------------------------------
-                # 智慧提示系統 - 邏輯結束
+                # End of Intelligent Cue System Logic
                 # --------------------------------------------------------------------
-
-                # 更新智慧提示UI (每一輪 UI 更新都會執行)
-                # 這個位置要確保 cues_display_container 已經被定義 (即在 col2 中)
-                # 並且 st.session_state.active_display_cues 已經被視訊處理迴圈更新
-                
-                # 這段邏輯應該放在主函數作用域下，確保每次streamlit rerun時都會更新提示區域
-                # 但它依賴於 video_frame_generator 循環內部對 st.session_state.active_display_cues 的更新
-                
-                _active_cues_to_show = st.session_state.get('active_display_cues', [])
-                _script_is_loaded = st.session_state.get('last_script_load_success', False)
-                _parsed_script_exists = st.session_state.get('parsed_script') is not None
-                _script_file_attempted = st.session_state.get('script_file_name') is not None
-
-                # 更新 cues_display_container 的內容
-                # 注意：cues_display_container 的定義需要在這段代碼執行前
-                # 通常它在 st.columns 分配的列中定義 st.empty()
-                
-                # 我們將這段更新邏輯移到 col2 初始化 cues_display_container 之後，確保它每次都能更新
-                # （實際上，Streamlit 的 st.empty() 或 st.container() 內容更新應該在其定義的列/塊內）
-                # 因此，這段更新顯示的邏輯，正確的位置是在定義了 cues_display_container 之後，
-                # 並且能夠訪問到 st.session_state.active_display_cues 的最新值。
-                # 在 Streamlit 的執行模型中，腳本從頭到尾執行，所以可以放在定義 col2 之後的任何地方，
-                # 或者，如果 cues_display_container 是在 col2 中，那麼就在 col2 的 with 塊中更新。
-
-                # 已將 cues_display_container 的更新邏輯放置在 col2 的 st.subheader("💡 智慧提示") 之後
-                # 以下是該更新邏輯的精煉版本，應放置在 `with col2:` 塊的末尾，或緊隨 `cues_display_container = st.empty()` 之後
-
-                # (在 with col2: 內部，緊隨 cues_display_container = st.empty() 之後)
-                # 這段代碼會被執行，前提是 st.session_state.active_display_cues 被主循環更新了
-                # logger.debug(f"Updating cues display. Active cues: {st.session_state.get('active_display_cues')}")
-                if _script_is_loaded and _parsed_script_exists:
-                    if _active_cues_to_show:
-                        cues_text_md = "\\n".join([f"- {cue_str}" for cue_str in _active_cues_to_show])
-                        cues_display_container.markdown(f"**預測的技術提示:**\\n{cues_text_md}")
-                    else:
-                        # 只有在視頻處理中（st.session_state.processing 為 True）且沒有 cues 時，才顯示 "目前無提示"
-                        # 否則在視頻未開始時，這個訊息也可能出現
-                        if st.session_state.get("processing", False):
-                             cues_display_container.info("目前無進行中的預測技術提示。")
-                        else:
-                             cues_display_container.info("開始視頻處理以查看提示。")
-                elif _script_file_attempted and not _script_is_loaded: # 嘗試過載入但失敗
-                    # 錯誤訊息已在側邊欄顯示，這裡可以不重複或顯示簡短提示
-                    cues_display_container.warning("劇本載入失敗，無法提供提示。請檢查側邊欄錯誤訊息。")
-                else: # 從未嘗試載入劇本
-                    cues_display_container.info("請在側邊欄上傳劇本檔案以啟用智慧提示。")
 
             # 處理完成
             st.session_state.processing = False
@@ -1338,3 +1352,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# 新增：輔助函式，用於檢查觸發條件
+def _check_trigger_condition(current_value: int, operator: str, required_value: int) -> bool:
+    """Checks if the current value meets the specified trigger condition."""
+    if operator == '==':
+        return current_value == required_value
+    elif operator == '>=':
+        return current_value >= required_value
+    elif operator == '<=':
+        return current_value <= required_value
+    elif operator == '>':
+        return current_value > required_value
+    elif operator == '<':
+        return current_value < required_value
+    else:
+        logger.warning(f"Unknown trigger condition operator: '{operator}'. Condition evaluated as False.")
+        return False
