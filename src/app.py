@@ -15,6 +15,7 @@ import tempfile
 import plotly.graph_objects as go
 from collections import deque
 import os
+import logging  # 確保導入日誌模組
 
 from config.settings import *
 from config.logging_config import setup_logging
@@ -33,6 +34,10 @@ from utils.image_enhancement import enhance_image, apply_histogram_equalization
 from core.platform_utils import is_jetson, is_mac, get_platform_info
 from utils.script_handler import load_script_from_uploaded_file
 
+# 強制設置日誌級別為 DEBUG
+logging.getLogger().setLevel(logging.DEBUG)
+print("=== 已強制設置根日誌級別為 DEBUG ===")
+
 # 設置頁面配置
 st.set_page_config(
     page_title="人體檢測與追蹤系統",
@@ -42,6 +47,8 @@ st.set_page_config(
 
 # 初始化日誌
 logger = setup_logging()
+logger.setLevel(logging.DEBUG)  # 強制將此特定 logger 設為 DEBUG 級別
+logger.debug("=== 日誌級別已設為 DEBUG 模式 ===")
 
 # 會話狀態初始化
 if "processing" not in st.session_state:
@@ -1063,8 +1070,25 @@ def main():
                 # 執行檢測
                 detections, _ = detector.detect(frame)
 
-                # 計算檢測到的人數
-                person_count = len(detections)
+                # 新增：確保 detections 中的每個元素都有 class_name，為智慧提示系統做準備
+                # 這段邏輯之前只在 tracking 未啟用時執行，現在移到這裡普遍應用
+                for det_item in detections:
+                    if "class_name" not in det_item and "class_id" in det_item:
+                        if det_item["class_id"] == 0: # 假設 class_id 0 是 person (COCO)
+                            det_item["class_name"] = "person"
+                        else:
+                            # 您可能需要一個從 class_id 到 class_name 的映射表
+                            # 暫時使用 class_id 作為名稱的一部分
+                            det_item["class_name"] = f"class_{det_item["class_id"]}"
+                    elif "class_name" not in det_item:
+                        # 如果連 class_id 都沒有，但有 bbox，可以標記為未知或通用類別
+                        # 但通常 detector 會提供 class_id 或 class_name
+                        det_item["class_name"] = "unknown_detection" 
+
+                # 計算檢測到的人數 (可以用 detections 直接計數，如果只關心總數)
+                # person_count = len(detections) # 這行可以保留，用於一般統計顯示
+                # 如果要精確計數 'person' 類別的數量，應從處理後的 detections 或 detected_object_counts 中獲取
+                # 更新: person_count 應基於 'person' class_name 的計數，稍後會在智慧提示邏輯中計算
 
                 # 執行追蹤（如果啟用）
                 tracks = []
@@ -1092,26 +1116,35 @@ def main():
                         # 添加簡單的軌跡記錄（僅當前幀）
                         det["trajectory"] = [(int(center_x), int(center_y))]
                         # 確保有class_name欄位，默認為"person"
-                        if "class_name" not in det and "class_id" in det:
-                            # 根據COCO數據集，0是人類
-                            if det["class_id"] == 0:
-                                det["class_name"] = "person"
-                            else:
-                                det["class_name"] = "class_" + str(det["class_id"])
-                        elif "class_name" not in det:
-                            det["class_name"] = "person"  # 預設為人類
+                        # 這段邏輯現在已移到 detections 產生後立即執行，此處可註釋或移除
+                        # if "class_name" not in det and "class_id" in det:
+                        #     # 根據COCO數據集，0是人類
+                        #     if det["class_id"] == 0:
+                        #         det["class_name"] = "person"
+                        #     else:
+                        #         det["class_name"] = "class_" + str(det["class_id"])
+                        # elif "class_name" not in det:
+                        #     det["class_name"] = "person"  # 預設為人類
 
                 # 更新統計 - 確保變數都已定義
                 process_time = time.time() - start_time
                 fps = 1.0 / process_time if process_time > 0 else 0
 
                 # 更新當前統計數據（用於實時顯示）- 即時統計的數據來源
-                st.session_state.current_stats["person_count"] = person_count  # 更新當前人數
+                # person_count 的更新應該更準確，基於對 "person" 類別的計數
+                # current_person_display_count = sum(1 for d in detections if d.get("class_name") == "person")
+                # st.session_state.current_stats["person_count"] = current_person_display_count 
+                 # person_count 的更新應來自 detected_object_counts.get("person",0) 
+                 # 但 detected_object_counts 在稍後的智慧提示邏輯中計算，
+                 # 為了UI即時統計，我們可以在這裡也算一次，或者從智慧提示部分回傳
+                 # 暫時維持原來的 person_count = len(detections) 用於UI顯示，智慧提示內部會用精確計數
+                st.session_state.current_stats["person_count"] = len(detections) # 保持UI統計為總檢測數
                 st.session_state.current_stats["track_count"] = track_count    # 更新追蹤ID數
                 st.session_state.current_stats["fps"] = fps                    # 更新當前幀率
                 
                 # 存儲統計數據至歷史記錄 - 用於趨勢圖表
-                st.session_state.stats["person_count"].append(person_count)
+                # st.session_state.stats["person_count"].append(current_person_display_count) # 改用精確計數
+                st.session_state.stats["person_count"].append(len(detections)) # 保持UI統計為總檢測數
                 st.session_state.stats["track_count"].append(track_count)
                 st.session_state.stats["timestamps"].append(timestamp)
                 st.session_state.stats["fps"].append(fps)
@@ -1181,7 +1214,7 @@ def main():
 
                 # 添加統計信息到畫面
                 result_frame = draw_stats(
-                    result_frame, person_count, fps, position="top-right"
+                    result_frame, len(detections), fps, position="top-right"
                 )
 
                 # 顯示結果 - 確保每幀都及時更新
@@ -1245,13 +1278,28 @@ def main():
                 script_loaded_successfully = st.session_state.get('last_script_load_success', False)
                 current_display_cues = [] # 本幀最終要顯示的 cues 字符串列表
 
+                # 添加測試日誌以確認代碼被執行
+                print(f"===測試=== 時間戳 {timestamp:.2f}, 劇本載入狀態: {script_loaded_successfully}, 劇本解析成功: {parsed_script_data is not None}")
+                logger.debug(f"===DEBUG測試=== 時間戳 {timestamp:.2f}, 劇本載入狀態: {script_loaded_successfully}, 劇本解析成功: {parsed_script_data is not None}")
+
                 if script_loaded_successfully and parsed_script_data:
+                    logger.debug(f"=== 開始處理劇本邏輯 - 時間戳: {timestamp:.2f} ===")
                     # 新增：計算當前幀檢測到的各類別物體數量
+                    # detections 列表此時應該已經被上面的通用邏輯填充了 class_name
                     detected_object_counts = {}
-                    for det in detections: # 'detections' 來自 detector.detect(frame)
-                        class_name = det.get("class_name", "unknown")
+                    for det_item in detections: # 使用已經處理過的 detections
+                        class_name = det_item.get("class_name", "unknown") # 理論上不會是 unknown 了
                         detected_object_counts[class_name] = detected_object_counts.get(class_name, 0) + 1
                     
+                    # 測試輸出 - 確認檢測結果
+                    person_count = detected_object_counts.get("person", 0)
+                    logger.debug(f"已檢測物體: {detected_object_counts}, 其中 'person': {person_count}")
+                    print(f"===測試=== 已檢測物體: {detected_object_counts}, 其中 'person': {person_count}")
+
+                    # 更新用於UI顯示的 person_count (如果需要精確的 person 類別計數)
+                    # st.session_state.current_stats["person_count"] = detected_object_counts.get("person", 0)
+                    # logger.debug(f"Updated UI person_count to: {st.session_state.current_stats["person_count"]}")
+
                     logger.debug(f"[Cue Check] Timestamp: {timestamp:.2f}, Detected Counts: {detected_object_counts}")
 
                     triggered_events_this_frame: List[Dict[str, Any]] = []
@@ -1262,15 +1310,24 @@ def main():
                         
                         time_match = timestamp >= event_time_start and timestamp < event_time_end
                         
+                        # 測試輸出 - 驗證時間匹配條件
+                        logger.debug(f"事件 '{event_id_for_log}': 時間匹配={time_match} ({timestamp:.2f} in [{event_time_start}, {event_time_end}))")
+                        
                         if time_match:
                             trigger_condition_config = event.get('trigger_condition', {})
                             cond_type = trigger_condition_config.get('type')
+                            
+                            # 測試輸出 - 驗證觸發條件類型
+                            logger.debug(f"事件 '{event_id_for_log}': 條件類型={cond_type}")
                             
                             event_triggered = False
                             if cond_type == 'object_conditions':
                                 individual_condition_results = []
                                 conditions_to_check = trigger_condition_config.get('conditions', [])
                                 overall_logic = trigger_condition_config.get('overall_logic', 'AND').upper()
+
+                                # 測試輸出 - 驗證條件列表
+                                logger.debug(f"事件 '{event_id_for_log}': 條件列表={conditions_to_check}, 邏輯={overall_logic}")
 
                                 if not conditions_to_check:
                                     logger.warning(f"事件 '{event_id_for_log}' 的 object_conditions 為空列表，視為不觸發。")
@@ -1341,10 +1398,13 @@ def main():
                             cue_desc = cue_obj.get('cue_description', 'N/A')
                             cue_offset = cue_obj.get('offset', 0) 
                             
-                            current_display_cues.append(
-                                f"事件'{event_desc_for_log}': "
-                                f"預計 {cue_offset:.1f}s 後 \"{cue_desc[:30]}...\" (觸發於 {activation_ts:.1f}s)"
-                            )
+                            # 將多行 append 合併為單行，以排除潛在的括號問題
+                            display_text = f"事件'{event_desc_for_log}': 預計 {cue_offset:.1f}s 後 \"{cue_desc[:30]}...\" (觸發於 {activation_ts:.1f}s)"
+                            current_display_cues.append(display_text)
+                
+                # 測試日誌 - 查看生成了什麼提示
+                logger.debug(f"最終生成的提示: {current_display_cues}")
+                print(f"===測試=== 最終生成的提示: {current_display_cues}")
 
                 st.session_state.active_display_cues = current_display_cues
                 # --------------------------------------------------------------------
