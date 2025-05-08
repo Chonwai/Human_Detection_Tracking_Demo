@@ -110,6 +110,23 @@ if "last_script_load_success" not in st.session_state:
 if "active_display_cues" not in st.session_state: # 用於存儲當前幀要顯示的 cues
     st.session_state.active_display_cues = []
 
+# 新增：輔助函式，用於檢查觸發條件 (移到這裡，確保在 main 之前定義)
+def _check_trigger_condition(current_value: int, operator: str, required_value: int) -> bool:
+    """Checks if the current value meets the specified trigger condition."""
+    if operator == '==':
+        return current_value == required_value
+    elif operator == '>=':
+        return current_value >= required_value
+    elif operator == '<=':
+        return current_value <= required_value
+    elif operator == '>':
+        return current_value > required_value
+    elif operator == '<':
+        return current_value < required_value
+    else:
+        logger.warning(f"Unknown trigger condition operator: '{operator}'. Condition evaluated as False.")
+        return False
+
 def main():
     """
     主應用入口函數
@@ -826,52 +843,50 @@ def main():
     with col2:
         # --- UI 位置調整：將智慧提示移到最上方 ---
         st.subheader("💡 智慧提示") 
-        cues_display_container = st.empty() 
+        cues_display_container = st.empty() # <--- 智慧提示的容器
         # --- UI 位置調整結束 ---
 
-        st.subheader("📊 即時統計") # 原來的即時統計現在在提示下方
+        st.subheader("📊 即時統計")
+        stats_container = st.empty()
         
-        # 創建空容器用於實時更新統計數據
-        stats_container = st.empty()  # 更新變數名稱，避免混淆
-        
-        # 趨勢圖表容器
         st.subheader("人數趨勢")
         trend_chart = st.empty()
         
         st.subheader("性能趨勢")
         fps_chart = st.empty()
         
-        # 僅當啟用追蹤時創建軌跡分析圖表容器
-        # if tracking_enabled: # tracking_enabled 可能在此處尚未定義，先註釋掉
-        #     st.subheader("軌跡分析")
-        #     track_chart = st.empty()
-        # --- UI 更新邏輯 --- 
-        # (這段更新邏輯需要放在 col2 with 塊的末尾或其他地方，
-        #  確保 st.session_state.active_display_cues 已被主循環更新)
-        #  為了應用修改，我暫時把它放在這裡，但執行時可能需要調整
-        _active_cues_to_show = st.session_state.get('active_display_cues', [])
-        _script_is_loaded = st.session_state.get('last_script_load_success', False)
-        _parsed_script_exists = st.session_state.get('parsed_script') is not None
-        _script_file_attempted = st.session_state.get('script_file_name') is not None
+        # 軌跡分析圖表容器 (如果需要，可以在 tracking_enabled 時創建)
+        # track_chart = st.empty() 
 
-        if _script_is_loaded and _parsed_script_exists:
-            if _active_cues_to_show:
-                cues_text_md = "\\n".join([f"- {cue_str}" for cue_str in _active_cues_to_show])
-                cues_display_container.markdown(f"**預測的技術提示:**\\n{cues_text_md}") 
-            else:
-                if st.session_state.get("processing", False):
-                     cues_display_container.info("目前無進行中的預測技術提示。")
+        # --- 初始的智慧提示UI渲染邏輯 (移到這裡確保容器創建後立即渲染一次) ---
+        # 該函數將在主循環中被再次調用以實現即時更新
+        def render_cues_display(container):
+            _active_cues_to_show = st.session_state.get('active_display_cues', [])
+            _script_is_loaded = st.session_state.get('last_script_load_success', False)
+            _parsed_script_exists = st.session_state.get('parsed_script') is not None
+            _script_file_attempted = st.session_state.get('script_file_name') is not None
+
+            if _script_is_loaded and _parsed_script_exists:
+                if _active_cues_to_show:
+                    # 修正：確保 \n 被正確轉換為換行符
+                    cues_text_md = "<br>".join([f"- {cue_str.replace('\\n', '<br>')}" for cue_str in _active_cues_to_show])
+                    container.markdown(f"**預測的技術提示:**<br>{cues_text_md}", unsafe_allow_html=True)
                 else:
-                     cues_display_container.info("開始視頻處理以查看提示。")
-        elif _script_file_attempted and not _script_is_loaded: 
-            cues_display_container.warning("劇本載入失敗，無法提供提示。請檢查側邊欄錯誤訊息。")
-        else: 
-            cues_display_container.info("請在側邊欄上傳劇本檔案以啟用智慧提示。")
-        # --- UI 更新邏輯結束 ---
+                    if st.session_state.get("processing", False):
+                         container.info("目前無進行中的預測技術提示。")
+                    else:
+                         container.info("開始視頻處理以查看提示。")
+            elif _script_file_attempted and not _script_is_loaded: 
+                container.warning("劇本載入失敗，無法提供提示。請檢查側邊欄錯誤訊息。")
+            else: 
+                container.info("請在側邊欄上傳劇本檔案以啟用智慧提示。")
+        
+        render_cues_display(cues_display_container) # 初始渲染一次
+        # --- 初始的智慧提示UI渲染邏輯結束 ---
 
     # 初始顯示統計資訊和圖表
     update_stats_display(stats_container, tracking_enabled)
-    update_trend_charts(trend_chart, fps_chart, track_chart, tracking_enabled)
+    update_trend_charts(trend_chart, fps_chart, None, tracking_enabled) # 暫時移除 track_chart
     
     # 如果正在處理視頻，則啟動檢測流程
     if st.session_state.processing and video_source is not None:
@@ -1160,7 +1175,7 @@ def main():
                 
                 # 每2秒更新一次圖表
                 if current_time - st.session_state.last_chart_update_time >= 2.0:
-                    update_trend_charts(trend_chart, fps_chart, track_chart, tracking_enabled)
+                    update_trend_charts(trend_chart, fps_chart, None, tracking_enabled)
                     st.session_state.last_chart_update_time = current_time
                 
                 # 檢查是否需要定期完全刷新頁面
@@ -1411,8 +1426,15 @@ def main():
                 # End of Intelligent Cue System Logic
                 # --------------------------------------------------------------------
 
-            # 處理完成
+                # === 新增：在主循環中強制更新智慧提示UI ===
+                render_cues_display(cues_display_container)
+                # === 新增結束 ===
+
+            # 處理完成 (當循環結束後)
             st.session_state.processing = False
+            # 循環結束後，最後再渲染一次提示 (確保顯示最終狀態，例如處理完成後無提示)
+            # 或者，如果希望處理停止後清空提示，則可以在這裡設置 st.session_state.active_display_cues = []
+            render_cues_display(cues_display_container)
 
         except Exception as e:
             logger.error("處理視頻時出錯: " + str(e))
@@ -1436,20 +1458,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# 新增：輔助函式，用於檢查觸發條件
-def _check_trigger_condition(current_value: int, operator: str, required_value: int) -> bool:
-    """Checks if the current value meets the specified trigger condition."""
-    if operator == '==':
-        return current_value == required_value
-    elif operator == '>=':
-        return current_value >= required_value
-    elif operator == '<=':
-        return current_value <= required_value
-    elif operator == '>':
-        return current_value > required_value
-    elif operator == '<':
-        return current_value < required_value
-    else:
-        logger.warning(f"Unknown trigger condition operator: '{operator}'. Condition evaluated as False.")
-        return False

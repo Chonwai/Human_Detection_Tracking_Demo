@@ -23,20 +23,20 @@ logger = logging.getLogger("YOLODetector")
 
 class YOLODetector(DetectorBase):
     """
-    YOLOv8檢測器類
-    實現基於YOLOv8的物體檢測
+    YOLOv12檢測器類
+    實現基於YOLOv12的物體檢測
     """
     
     def __init__(
         self,
-        model_name: str = "yolov8n.pt",  # 默認使用YOLOv8-nano模型
+        model_name: str = "yolo12l.pt",  # 默認使用YOLOv12-large模型
         conf_threshold: float = DETECTION_CONF,
         iou_threshold: float = DETECTION_IOU,
         classes: List[int] = DETECTION_CLASSES,
         device: str = DEVICE
     ):
         """
-        初始化YOLOv8檢測器
+        初始化YOLOv12檢測器
         
         Args:
             model_name: 模型名稱或路徑
