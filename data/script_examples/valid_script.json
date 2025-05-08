@@ -3,7 +3,7 @@
     "event_id": "EVT001",
     "description": "開場 - 單人演講",
     "time_start": 0.0,
-    "time_end": 60.5,
+    "time_end": 60.0,
     "trigger_condition": {
       "type": "object_conditions",
       "conditions": [
