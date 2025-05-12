@@ -1,23 +1,55 @@
 [
   {
-    "event_id": "EVT001",
-    "description": "開場 - 單人演講",
+    "event_id": "EVT000",
+    "description": "開場 - Mr.Bean 出場",
     "time_start": 0.0,
-    "time_end": 60.0,
+    "time_end": 10.0,
     "trigger_condition": {
       "type": "object_conditions",
-      "conditions": [
-        { "class_name": "person", "operator": "==", "value": 1 }
-      ],
+      "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
       "overall_logic": "AND"
     },
     "predicted_cues": [
-      { 
-        "offset": 5.0, 
-        "cue_description": "LX Cue 1: 主講人追光亮起 @ 80%" 
+      {
+        "offset": 2.0,
+        "cue_description": "Mr.Bean 出場"
+      }
+    ]
+  },
+  {
+    "event_id": "EVT001",
+    "description": "投射燈亮起，照亮 Mr.Bean 和椅子，關閉其他燈光",
+    "time_start": 48.0,
+    "time_end": 55.0,
+    "trigger_condition": {
+      "type": "object_conditions",
+      "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }, { "class_name": "chair", "operator": "==", "value": 1 }],
+      "overall_logic": "AND"
+    },
+    "predicted_cues": [
+      {
+        "offset": 5.0,
+        "cue_description": "投射燈亮起，照亮 Mr.Bean 和椅子，關閉其他燈光"
+      }
+    ]
+  },
+  {
+    "event_id": "EVT002",
+    "description": "開場 - 單人演講",
+    "time_start": 100.0,
+    "time_end": 105.0,
+    "trigger_condition": {
+      "type": "object_conditions",
+      "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
+      "overall_logic": "AND"
+    },
+    "predicted_cues": [
+      {
+        "offset": 5.0,
+        "cue_description": "LX Cue 1: 主講人追光亮起 @ 80%"
       },
-      { 
-        "offset": 10.2, 
+      {
+        "offset": 10.2,
         "cue_description": "SFX Cue A: 背景輕音樂淡入"
       }
     ]
@@ -25,23 +57,21 @@
   {
     "event_id": "EVT002",
     "description": "互動環節 - 至少兩人",
-    "time_start": 60.5,
-    "time_end": 120.0,
+    "time_start": 120.0,
+    "time_end": 125.0,
     "trigger_condition": {
       "type": "object_conditions",
-      "conditions": [
-        { "class_name": "person", "operator": ">=", "value": 2 }
-      ],
+      "conditions": [{ "class_name": "person", "operator": ">=", "value": 2 }],
       "overall_logic": "AND"
     },
     "predicted_cues": [
-      { 
-        "offset": 3.0, 
-        "cue_description": "LX Cue 5: 舞台全亮" 
+      {
+        "offset": 3.0,
+        "cue_description": "LX Cue 5: 舞台全亮"
       },
-      { 
-        "offset": 3.0, 
-        "cue_description": "MIC Cue 2: 開啟手持麥克風" 
+      {
+        "offset": 3.0,
+        "cue_description": "MIC Cue 2: 開啟手持麥克風"
       }
     ]
   },
@@ -52,11 +82,9 @@
     "time_end": 150.0,
     "trigger_condition": {
       "type": "object_conditions",
-      "conditions": [
-        { "class_name": "person", "operator": "<=", "value": 5 }
-      ],
+      "conditions": [{ "class_name": "person", "operator": "<=", "value": 5 }],
       "overall_logic": "AND"
     },
     "predicted_cues": []
   }
-] 
+]
