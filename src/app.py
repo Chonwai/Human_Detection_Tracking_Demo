@@ -836,7 +836,7 @@ def main():
 
     # 主界面
     # 分為兩列：左側視頻顯示，右側統計信息
-    col1, col2 = st.columns([4, 1])  # 修改比例讓視頻區域更寬
+    col1, col2 = st.columns([2, 1])  # 修改比例讓視頻區域更寬
 
     with col1:
         # 視頻顯示區域
