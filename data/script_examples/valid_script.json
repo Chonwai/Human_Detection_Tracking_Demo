@@ -20,7 +20,7 @@
     "event_id": "EVT001",
     "description": "撞擊鼓的聲音",
     "time_start": 20.0,
-    "time_end": 24.0,
+    "time_end": 22.0,
     "trigger_condition": {
       "type": "object_conditions",
       "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
@@ -37,7 +37,7 @@
     "event_id": "EVT002",
     "description": "鈸碰撞的聲音",
     "time_start": 26.0,
-    "time_end": 30.0,
+    "time_end": 28.0,
     "trigger_condition": {
       "type": "object_conditions",
       "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
@@ -54,7 +54,7 @@
     "event_id": "EVT003",
     "description": "鼓棒跌落在地上的聲音",
     "time_start": 34.0,
-    "time_end": 38.0,
+    "time_end": 36.0,
     "trigger_condition": {
       "type": "object_conditions",
       "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
@@ -71,7 +71,7 @@
     "event_id": "EVT004",
     "description": "鼓棒在地上滾動的聲音",
     "time_start": 39.0,
-    "time_end": 42.0,
+    "time_end": 41.0,
     "trigger_condition": {
       "type": "object_conditions",
       "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
@@ -88,7 +88,7 @@
     "event_id": "EVT005",
     "description": "鼓棒在地上滾動的聲音",
     "time_start": 42.0,
-    "time_end": 45.0,
+    "time_end": 44.0,
     "trigger_condition": {
       "type": "object_conditions",
       "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
@@ -104,8 +104,8 @@
   {
     "event_id": "EVT006",
     "description": "鼓棒在地上滾動的聲音",
-    "time_start": 47.0,
-    "time_end": 50.0,
+    "time_start": 46.0,
+    "time_end": 48.0,
     "trigger_condition": {
       "type": "object_conditions",
       "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
@@ -125,7 +125,7 @@
     "time_end": 55.0,
     "trigger_condition": {
       "type": "object_conditions",
-      "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }, { "class_name": "chair", "operator": "==", "value": 1 }],
+      "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
       "overall_logic": "AND"
     },
     "predicted_cues": [
