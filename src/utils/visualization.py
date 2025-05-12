@@ -300,7 +300,7 @@ def draw_stats(
     h, w = output_frame.shape[:2]
 
     # 準備統計文本
-    stats_text = "People: " + str(person_count) + " | FPS: " + str(round(fps, 1))
+    stats_text = "Object: " + str(person_count) + " | FPS: " + str(round(fps, 1))
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.7
     thickness = 2
