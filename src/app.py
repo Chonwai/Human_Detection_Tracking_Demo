@@ -112,7 +112,16 @@ if "last_script_load_success" not in st.session_state:
 
 # 新的 Session State 用於管理帶有生命週期的活躍提示
 if "managed_active_cues" not in st.session_state:
-    st.session_state.managed_active_cues = [] # 每個元素是 {'id': str, 'text': str, 'removal_timestamp': float, 'source_event_id': str}
+    # 修改結構：存儲原始信息以動態生成文本
+    st.session_state.managed_active_cues = [] 
+    # 每個元素是 {
+    #   'id': str, 
+    #   'source_event_id': str, 
+    #   'activation_timestamp': float, 
+    #   'removal_timestamp': float, 
+    #   'original_offset': float, 
+    #   'cue_description': str
+    # }
 
 # 新增：輔助函式，用於檢查觸發條件 (移到這裡，確保在 main 之前定義)
 def _check_trigger_condition(current_value: int, operator: str, required_value: int) -> bool:
@@ -849,7 +858,7 @@ def main():
         st.subheader("💡 智慧提示") 
         cues_display_container = st.empty() # <--- 智慧提示的容器
         # --- UI 位置調整結束 ---
-
+        
         st.subheader("📊 即時統計")
         stats_container = st.empty()
         
@@ -862,12 +871,35 @@ def main():
         # 軌跡分析圖表容器 (如果需要，可以在 tracking_enabled 時創建)
         # track_chart = st.empty() 
 
-        # --- 初始的智慧提示UI渲染邏輯 (修改以使用 managed_active_cues) ---
-        def render_cues_display(container):
-            # 從 managed_active_cues 獲取當前應該顯示的提示文本列表
-            # 注意：過期提示的移除邏輯現在在主循環中處理
-            cues_to_display_now = [cue['text'] for cue in st.session_state.get('managed_active_cues', [])]
+        # --- 修改智慧提示UI渲染邏輯 (增加 current_timestamp 參數並動態計算) ---
+        def render_cues_display(container, current_timestamp: Optional[float] = None):
+            cues_to_display_now = []
+            managed_cues = st.session_state.get('managed_active_cues', [])
             
+            # 如果有有效的當前時間戳，則動態生成帶倒計時的文本
+            if current_timestamp is not None:
+                for cue in managed_cues:
+                    remaining_time = max(0.0, cue['removal_timestamp'] - current_timestamp)
+                    # 使用原始描述和計算出的剩餘時間來格式化文本
+                    display_text = (
+                        f"事件'{cue['source_event_id']}': "
+                        f"剩餘 {remaining_time:.1f}s - "
+                        f"\"{cue['cue_description']}\" " # 截斷描述以防過長
+                        f"(觸發於 {cue['activation_timestamp']:.1f}s)"
+                    )
+                    cues_to_display_now.append(display_text)
+            else:
+                # 如果沒有當前時間戳 (例如初始渲染或處理停止時)，可以顯示原始偏移量或默認文本
+                 for cue in managed_cues:
+                    # 保持原來的格式，顯示原始 offset
+                     display_text = (
+                        f"事件'{cue['source_event_id']}': "
+                        f"預計 {cue['original_offset']:.1f}s 後 - " 
+                        f"\"{cue['cue_description'][:30]}...\" "
+                        f"(觸發於 {cue['activation_timestamp']:.1f}s)"
+                    )                     
+                     cues_to_display_now.append(display_text)
+
             _script_is_loaded = st.session_state.get('last_script_load_success', False)
             _parsed_script_exists = st.session_state.get('parsed_script') is not None
             _script_file_attempted = st.session_state.get('script_file_name') is not None
@@ -886,9 +918,9 @@ def main():
             else: 
                 container.info("請在側邊欄上傳劇本檔案以啟用智慧提示。")
         
-        render_cues_display(cues_display_container) # 初始渲染一次
-        # --- 初始的智慧提示UI渲染邏輯結束 ---
-
+        render_cues_display(cues_display_container) # 初始渲染一次 (不傳遞 current_timestamp)
+        # --- 智慧提示UI渲染邏輯結束 ---
+        
     # 初始顯示統計資訊和圖表
     update_stats_display(stats_container, tracking_enabled)
     update_trend_charts(trend_chart, fps_chart, None, tracking_enabled) # 暫時移除 track_chart
@@ -1292,62 +1324,71 @@ def main():
                     )
 
                 # --------------------------------------------------------------------
-                # 智慧提示系統 - 核心邏輯整合點 (重構以管理提示生命周期)
+                # 智慧提示系統 - 核心邏輯整合點 (修改以存儲原始數據)
                 # --------------------------------------------------------------------
+                # 首先，計算當前幀檢測到的各類別物件數量
+                detected_object_counts: Dict[str, int] = {}
+                for det_item in detections: # 'detections' 應該已經在這裡可用且已處理 'class_name'
+                    class_name = det_item.get("class_name", "unknown_detection")
+                    detected_object_counts[class_name] = detected_object_counts.get(class_name, 0) + 1
+                
+                # 基於精確計數更新UI統計中的 person_count (如果需要)
+                # st.session_state.current_stats["person_count"] = detected_object_counts.get("person", 0)
+
                 parsed_script_data = st.session_state.get('parsed_script')
                 script_loaded_successfully = st.session_state.get('last_script_load_success', False)
                 
-                # logger.debug(f"===DEBUG測試=== 時間戳 {timestamp:.2f}, 劇本載入狀態: {script_loaded_successfully}, 劇本解析成功: {parsed_script_data is not None}")
-
                 if script_loaded_successfully and parsed_script_data:
-                    # logger.debug(f"=== 開始處理劇本邏輯 - 時間戳: {timestamp:.2f} ===")
-                    detected_object_counts = {}
-                    for det_item in detections:
-                        class_name = det_item.get("class_name", "unknown")
-                        detected_object_counts[class_name] = detected_object_counts.get(class_name, 0) + 1
-                    
-                    # person_count = detected_object_counts.get("person", 0)
-                    # logger.debug(f"已檢測物體: {detected_object_counts}, 其中 'person': {person_count}")
-                    # print(f"===測試=== 已檢測物體: {detected_object_counts}, 其中 'person': {person_count}")
-                    # logger.debug(f"[Cue Check] Timestamp: {timestamp:.2f}, Detected Counts: {detected_object_counts}")
+                    # ... (detection counting logic remains the same) ...
 
                     # 1. 移除過期的 cues from st.session_state.managed_active_cues
                     current_managed_cues = st.session_state.get('managed_active_cues', [])
                     active_cues_after_removal = []
+                    logger.debug(f"--- Frame timestamp: {timestamp:.2f} ---") # <--- 建議增加的日誌
                     for cue_item in current_managed_cues:
-                        # 檢查 cue 是否過期 (基於 removal_timestamp)
                         is_cue_expired = timestamp >= cue_item['removal_timestamp']
-                        
-                        # 檢查 cue 所屬的 event 是否已結束 (基於 event time_end)
                         source_event = next((evt for evt in parsed_script_data if evt.get('event_id') == cue_item['source_event_id']), None)
                         is_event_over = False
+                        event_time_end_for_cue_display = "N/A" # 用於日誌
                         if source_event:
-                            event_time_end_for_cue = source_event.get('time_end', float('-inf'))
+                            event_time_end_for_cue = source_event.get('time_end', float('inf'))
+                            event_time_end_for_cue_display = f"{event_time_end_for_cue:.2f}" if event_time_end_for_cue != float('inf') else "inf"
                             if timestamp >= event_time_end_for_cue:
                                 is_event_over = True
                         
-                        if not is_cue_expired and not is_event_over:
-                            active_cues_after_removal.append(cue_item)
-                        else:
-                            logger.debug(f"Removing cue for event '{cue_item['source_event_id']}' ('{cue_item['text'][:20]}...'). Expired: {is_cue_expired}, Event Over: {is_event_over}")
-                    st.session_state.managed_active_cues = active_cues_after_removal
+                        # <--- 建議增加的詳細日誌 ---
+                        logger.debug(
+                            f"Cue ID: {cue_item.get('id', 'N/A')}, "
+                            f"Activation: {cue_item.get('activation_timestamp', 0):.2f}, "
+                            f"Offset: {cue_item.get('original_offset', 0):.2f}, "
+                            f"RemovalTS: {cue_item.get('removal_timestamp', 0):.2f} | "
+                            f"is_cue_expired: {is_cue_expired} | "
+                            f"EventEnd: {event_time_end_for_cue_display} | "
+                            f"is_event_over: {is_event_over} | "
+                            f"Kept: {not is_cue_expired and not is_event_over}"
+                        )
+                        # <--- 日誌結束 ---
 
+                        if not is_cue_expired and not is_event_over: # Item is kept
+                            active_cues_after_removal.append(cue_item)
+
+                    logger.debug(f"Managed cues before update: {len(current_managed_cues)}, after update: {len(active_cues_after_removal)}") # <--- 建議增加的日誌
+                    st.session_state.managed_active_cues = active_cues_after_removal
+                    
                     # 2. 檢查並觸發新的事件和 cues
                     for event in parsed_script_data:
-                        event_id = event.get('event_id', f"event_{hash(event.get('description'))}") # 生成唯一ID（如果沒有提供）
+                        # ... (event_id, time matching, trigger condition check logic remains the same) ...
+                        event_id = event.get('event_id', f"event_{hash(event.get('description'))}")
                         event_time_start = event.get('time_start', float('inf'))
                         event_time_end = event.get('time_end', float('-inf'))
-                        
                         time_match = timestamp >= event_time_start and timestamp < event_time_end
-                        # logger.debug(f"事件 '{event_id}': 時間匹配={time_match} ({timestamp:.2f} in [{event_time_start}, {event_time_end}))")
-                        
+
                         if time_match:
+                            # ... (event_triggered calculation logic remains the same) ...
                             trigger_condition_config = event.get('trigger_condition', {})
                             cond_type = trigger_condition_config.get('type')
-                            # logger.debug(f"事件 '{event_id}': 條件類型={cond_type}")
-                            
                             event_triggered = False
-                            # ... (原有的 event_triggered 判斷邏輯，包括 _check_trigger_condition 調用) ...
+                            # [Copy the condition checking logic here as before]
                             if cond_type == 'object_conditions':
                                 individual_condition_results = []
                                 conditions_to_check = trigger_condition_config.get('conditions', [])
@@ -1368,7 +1409,7 @@ def main():
                                     if individual_condition_results:
                                         if overall_logic == 'AND': event_triggered = all(individual_condition_results)
                                         elif overall_logic == 'OR': event_triggered = any(individual_condition_results)
-                                        else: event_triggered = all(individual_condition_results) # Default to AND
+                                        else: event_triggered = all(individual_condition_results)
                                     else: event_triggered = False
                             elif cond_type == 'person_count':
                                 op = trigger_condition_config.get('operator')
@@ -1376,56 +1417,42 @@ def main():
                                 if op and val is not None:
                                     current_person_count = detected_object_counts.get("person", 0)
                                     event_triggered = _check_trigger_condition(current_person_count, op, val)
-                            # ... (其他 cond_type 判斷保持不變) ...
-
+                            # [/End condition checking logic copy]
+                            
                             if event_triggered:
-                                # logger.info(f"事件 '{event_id}' 在 {timestamp:.2f}s 時觸發條件滿足。準備添加cues...")
                                 for cue_obj in event.get("predicted_cues", []):
                                     cue_desc = cue_obj.get('cue_description', 'N/A')
                                     cue_offset = cue_obj.get('offset', 0)
-                                    
-                                    # 創建唯一的 cue_id 以防止重複添加
-                                    # 組合 event_id 和 cue_description (或更好的唯一標識符，如果cue_obj有)
                                     unique_cue_identifier = f"{event_id}_{cue_desc}"
-
-                                    # 檢查此 cue 是否已存在於 managed_active_cues 中
                                     is_cue_already_active = any(
                                         active_cue['id'] == unique_cue_identifier 
                                         for active_cue in st.session_state.managed_active_cues
                                     )
-
                                     if not is_cue_already_active:
-                                        activation_ts = timestamp # 事件觸發時的影片時間
+                                        activation_ts = timestamp 
                                         removal_ts = activation_ts + cue_offset
-                                        display_text = f"事件'{event.get('event_id', event_id)}': 預計 {cue_offset:.1f}s 後 \"{cue_desc[:30]}...\" (觸發於 {activation_ts:.1f}s)"
-                                        
+                                        # **改動點：存儲原始數據，而不是格式化文本**
                                         new_cue_item = {
                                             'id': unique_cue_identifier,
-                                            'text': display_text,
+                                            'source_event_id': event_id,
                                             'activation_timestamp': activation_ts,
                                             'removal_timestamp': removal_ts,
-                                            'source_event_id': event_id # 用於關聯回原事件，例如檢查event.time_end
+                                            'original_offset': cue_offset,      # <--- 新增
+                                            'cue_description': cue_desc         # <--- 新增
                                         }
                                         st.session_state.managed_active_cues.append(new_cue_item)
-                                        logger.debug(f"Added new cue: {display_text} for event {event_id}. Removal at {removal_ts:.2f}s.")
-                                    # else:
-                                        # logger.debug(f"Cue '{unique_cue_identifier}' for event '{event_id}' is already active.")
-                
-                # 不再直接賦值給 st.session_state.active_display_cues
-                # logger.debug(f"最終 managed_active_cues: {[cue['text'] for cue in st.session_state.managed_active_cues]}")
-                # print(f"===測試=== 最終 managed_active_cues: {[cue['text'] for cue in st.session_state.managed_active_cues]}")
+                                        # logger.debug(f"Added new cue: {cue_desc} for event {event_id}. Removal at {removal_ts:.2f}s.")
                 # --------------------------------------------------------------------
                 # End of Intelligent Cue System Logic
                 # --------------------------------------------------------------------
 
-                # === 在主循環中強制更新智慧提示UI (已移到 render_cues_display 內部邏輯) ===
-                render_cues_display(cues_display_container)
-                # === 新增結束 ===
+                # === 修改：傳遞當前時間戳給渲染函數 ===
+                render_cues_display(cues_display_container, timestamp)
+                # === 修改結束 ===
 
             # 處理完成 (當循環結束後)
             st.session_state.processing = False
-            # 循環結束後，最後再渲染一次提示 (確保顯示最終狀態，例如處理完成後無提示)
-            # 或者，如果希望處理停止後清空提示，則可以在這裡設置 st.session_state.active_display_cues = []
+            # 循環結束後，最後再渲染一次提示 (不傳遞時間戳，顯示原始offset或結束狀態)
             render_cues_display(cues_display_container)
 
         except Exception as e:
