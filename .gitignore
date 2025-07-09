@@ -15,8 +15,6 @@ __pycache__/
 *.pyz
 
 # 輸出數據目錄
-data/output
-data/videos
 data/models
 
 # 大型數據文件（除非使用LFS追蹤）
