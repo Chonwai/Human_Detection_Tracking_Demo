@@ -14,9 +14,6 @@ __pycache__/
 *.pyw
 *.pyz
 
-# 輸出數據目錄
-data/models
-
 # 大型數據文件（除非使用LFS追蹤）
 # 注意：模型文件(.pt)現在由Git LFS追蹤，不需要在此忽略
 
