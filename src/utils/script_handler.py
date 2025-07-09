@@ -158,6 +158,39 @@ def _validate_script_format(script_data: List[Dict[str, Any]], script_source_nam
                 if not isinstance(description, str) or not description.strip():
                     errors.append(f"{cue_identifier}: 'cue_description' 應為非空字串，但得到的是 '{description}' (類型: {type(description).__name__})。")
                 
+                # 新增: 檢查 actions 字段 (如果存在)
+                actions = cue.get('actions')
+                if actions is not None:
+                    if not isinstance(actions, list):
+                        errors.append(f"{cue_identifier}: 'actions' 應為一個列表 (list)，但得到的是 '{actions}' (類型: {type(actions).__name__})。")
+                    else:
+                        for action_idx, action in enumerate(actions):
+                            action_identifier = f"{cue_identifier} 中的 Action {action_idx+1}"
+                            if not isinstance(action, dict):
+                                errors.append(f"{action_identifier}: 每個 action 必須是一個字典 (dict)，但得到的是 {type(action).__name__}。")
+                                continue
+                            
+                            if 'type' not in action:
+                                errors.append(f"{action_identifier}: 缺少必要欄位 'type'。")
+                            
+                            action_type = action.get('type')
+                            if not isinstance(action_type, str) or not action_type.strip():
+                                errors.append(f"{action_identifier}: 'type' 應為非空字串，但得到的是 '{action_type}' (類型: {type(action_type).__name__})。")
+                            
+                            # 根據不同的 action_type 檢查特定字段
+                            if action_type == 'keyboard_action':
+                                # 檢查 keyboard_action 特定字段
+                                key = action.get('key')
+                                if key is not None and not isinstance(key, str):
+                                    errors.append(f"{action_identifier}: 'key' 應為字串，但得到的是 '{key}' (類型: {type(key).__name__})。")
+                                
+                                key_action = action.get('key_action')
+                                if key_action is not None and not isinstance(key_action, str):
+                                    errors.append(f"{action_identifier}: 'key_action' 應為字串，但得到的是 '{key_action}' (類型: {type(key_action).__name__})。")
+                                
+                                if key_action not in (None, 'tap', 'press', 'release'):
+                                    errors.append(f"{action_identifier}: 'key_action' 的值 '{key_action}' 無效。有效值為: [null, 'tap', 'press', 'release']。")
+                
                 # 可選: 檢查 cue_category (如果最終設計包含此欄位)
                 # cue_category = cue.get('cue_category')
                 # if cue_category is not None and cue_category not in VALID_CUE_CATEGORIES:

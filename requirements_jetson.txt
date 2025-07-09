@@ -17,3 +17,6 @@
 # Jetson特定優化庫
 # 注意：某些庫可能已經預裝在JetPack中
 jetson-stats  # 用於監控Jetson硬件性能 
+
+# 添加pynput依賴
+pynput>=1.7.6 

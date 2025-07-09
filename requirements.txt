@@ -27,4 +27,7 @@ pytest>=7.0.0
 black>=22.0.0
 isort>=5.10.0
 pylint>=2.15.0
-streamlit-webrtc>=0.47.0 
+streamlit-webrtc>=0.47.0
+
+# 添加pynput依賴
+pynput>=1.7.6 

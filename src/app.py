@@ -33,6 +33,7 @@ from utils.visualization import (
 from utils.image_enhancement import enhance_image, apply_histogram_equalization
 from core.platform_utils import is_jetson, is_mac, get_platform_info
 from utils.script_handler import load_script_from_uploaded_file
+from core.automation_utils import execute_automation_action
 
 # 強制設置日誌級別為 DEBUG
 logging.getLogger().setLevel(logging.DEBUG)
@@ -906,7 +907,11 @@ def main():
 
             if _script_is_loaded and _parsed_script_exists:
                 if cues_to_display_now:
-                    cues_text_md = "<br>".join([f"- {cue_str.replace('\\n', '<br>')}" for cue_str in cues_to_display_now])
+                    formatted_cues = []
+                    for cue_str in cues_to_display_now:
+                        formatted_cue = cue_str.replace('\n', '<br>')
+                        formatted_cues.append(f"- {formatted_cue}")
+                    cues_text_md = "<br>".join(formatted_cues)
                     container.markdown(f"**預測的技術提示:**<br>{cues_text_md}", unsafe_allow_html=True)
                 else:
                     if st.session_state.get("processing", False):
@@ -1131,7 +1136,7 @@ def main():
                         else:
                             # 您可能需要一個從 class_id 到 class_name 的映射表
                             # 暫時使用 class_id 作為名稱的一部分
-                            det_item["class_name"] = f"class_{det_item["class_id"]}"
+                            det_item["class_name"] = f"class_{det_item['class_id']}"
                     elif "class_name" not in det_item:
                         # 如果連 class_id 都沒有，但有 bbox，可以標記為未知或通用類別
                         # 但通常 detector 會提供 class_id 或 class_name
@@ -1369,6 +1374,18 @@ def main():
                         )
                         # <--- 日誌結束 ---
 
+                        # 新增：在cue即將過期時執行actions
+                        if is_cue_expired and 'actions' in cue_item and cue_item.get('actions_executed', False) == False:
+                            logger.info(f"執行cue actions，ID: {cue_item.get('id', 'N/A')}")
+                            actions = cue_item.get('actions', [])
+                            for action in actions:
+                                success = execute_automation_action(action)
+                                if success:
+                                    logger.info(f"成功執行動作: {action.get('type', 'unknown')}")
+                                else:
+                                    logger.warning(f"執行動作失敗: {action.get('type', 'unknown')}")
+                            cue_item['actions_executed'] = True
+
                         if not is_cue_expired and not is_event_over: # Item is kept
                             active_cues_after_removal.append(cue_item)
 
@@ -1431,17 +1448,19 @@ def main():
                                     if not is_cue_already_active:
                                         activation_ts = timestamp 
                                         removal_ts = activation_ts + cue_offset
-                                        # **改動點：存儲原始數據，而不是格式化文本**
+                                        # **改動點：存儲原始數據，包括actions**
                                         new_cue_item = {
                                             'id': unique_cue_identifier,
                                             'source_event_id': event_id,
                                             'activation_timestamp': activation_ts,
                                             'removal_timestamp': removal_ts,
-                                            'original_offset': cue_offset,      # <--- 新增
-                                            'cue_description': cue_desc         # <--- 新增
+                                            'original_offset': cue_offset,      
+                                            'cue_description': cue_desc,         
+                                            'actions': cue_obj.get('actions', []),  # 新增: 保存actions
+                                            'actions_executed': False              # 新增: 標記actions是否已執行
                                         }
                                         st.session_state.managed_active_cues.append(new_cue_item)
-                                        # logger.debug(f"Added new cue: {cue_desc} for event {event_id}. Removal at {removal_ts:.2f}s.")
+                                        logger.info(f"添加新cue: {cue_desc}，ID: {unique_cue_identifier}，actions數量: {len(cue_obj.get('actions', []))}")
                 # --------------------------------------------------------------------
                 # End of Intelligent Cue System Logic
                 # --------------------------------------------------------------------

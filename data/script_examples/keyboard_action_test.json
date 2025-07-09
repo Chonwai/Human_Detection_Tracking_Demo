@@ -1,0 +1,89 @@
+[
+  {
+    "event_id": "TEST001",
+    "description": "按空白鍵測試",
+    "time_start": 0.0,
+    "time_end": 30.0,
+    "trigger_condition": {
+      "type": "object_conditions",
+      "conditions": [{ "class_name": "person", "operator": "==", "value": 1 }],
+      "overall_logic": "AND"
+    },
+    "predicted_cues": [
+      {
+        "offset": 5.0,
+        "cue_description": "模擬按下空白鍵",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "event_id": "TEST002",
+    "description": "按Enter鍵測試",
+    "time_start": 0.0,
+    "time_end": 30.0,
+    "trigger_condition": {
+      "type": "object_conditions",
+      "conditions": [{ "class_name": "person", "operator": ">=", "value": 2 }],
+      "overall_logic": "AND"
+    },
+    "predicted_cues": [
+      {
+        "offset": 3.0,
+        "cue_description": "模擬按下Enter鍵",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "enter",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "event_id": "TEST003",
+    "description": "連續按鍵測試",
+    "time_start": 0.0,
+    "time_end": 30.0,
+    "trigger_condition": {
+      "type": "person_count",
+      "operator": ">=",
+      "value": 3
+    },
+    "predicted_cues": [
+      {
+        "offset": 2.0,
+        "cue_description": "模擬連續按下三次Tab鍵",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "tab",
+            "key_action": "tap",
+            "delay": 0.05
+          },
+          {
+            "type": "keyboard_action",
+            "key": "tab",
+            "key_action": "tap",
+            "delay": 0.05
+          },
+          {
+            "type": "keyboard_action",
+            "key": "tab",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
+      }
+    ]
+  }
+] 

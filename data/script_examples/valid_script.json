@@ -12,7 +12,15 @@
     "predicted_cues": [
       {
         "offset": 2.0,
-        "cue_description": "Mr.Bean 出場"
+        "cue_description": "Mr.Bean 出場",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
@@ -29,7 +37,15 @@
     "predicted_cues": [
       {
         "offset": 2.0,
-        "cue_description": "撞擊鼓的聲音"
+        "cue_description": "撞擊鼓的聲音",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
@@ -46,7 +62,15 @@
     "predicted_cues": [
       {
         "offset": 2.0,
-        "cue_description": "鈸碰撞的聲音"
+        "cue_description": "鈸碰撞的聲音",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
@@ -63,7 +87,15 @@
     "predicted_cues": [
       {
         "offset": 2.0,
-        "cue_description": "鼓棒跌落在地上的聲音"
+        "cue_description": "鼓棒跌落在地上的聲音",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
@@ -80,7 +112,15 @@
     "predicted_cues": [
       {
         "offset": 2.0,
-        "cue_description": "鼓棒在地上滾動的聲音"
+        "cue_description": "鼓棒在地上滾動的聲音",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
@@ -97,7 +137,15 @@
     "predicted_cues": [
       {
         "offset": 2.0,
-        "cue_description": "鼓棒在地上滾動的聲音"
+        "cue_description": "鼓棒在地上滾動的聲音",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
@@ -114,7 +162,15 @@
     "predicted_cues": [
       {
         "offset": 2.0,
-        "cue_description": "鼓棒在地上滾動的聲音"
+        "cue_description": "鼓棒在地上滾動的聲音",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
@@ -131,12 +187,20 @@
     "predicted_cues": [
       {
         "offset": 5.0,
-        "cue_description": "投射燈亮起，照亮 Mr.Bean 和椅子，關閉其他燈光"
+        "cue_description": "投射燈亮起，照亮 Mr.Bean 和椅子，關閉其他燈光",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
   {
-    "event_id": "EVT002",
+    "event_id": "EVT008",
     "description": "開場 - 單人演講",
     "time_start": 100.0,
     "time_end": 105.0,
@@ -148,16 +212,32 @@
     "predicted_cues": [
       {
         "offset": 5.0,
-        "cue_description": "LX Cue 1: 主講人追光亮起 @ 80%"
+        "cue_description": "LX Cue 1: 主講人追光亮起 @ 80%",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       },
       {
         "offset": 10.2,
-        "cue_description": "SFX Cue A: 背景輕音樂淡入"
+        "cue_description": "SFX Cue A: 背景輕音樂淡入",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },
   {
-    "event_id": "EVT002",
+    "event_id": "EVT009",
     "description": "互動環節 - 至少兩人",
     "time_start": 120.0,
     "time_end": 125.0,
@@ -169,11 +249,27 @@
     "predicted_cues": [
       {
         "offset": 3.0,
-        "cue_description": "LX Cue 5: 舞台全亮"
+        "cue_description": "LX Cue 5: 舞台全亮",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       },
       {
         "offset": 3.0,
-        "cue_description": "MIC Cue 2: 開啟手持麥克風"
+        "cue_description": "MIC Cue 2: 開啟手持麥克風",
+        "actions": [
+          {
+            "type": "keyboard_action",
+            "key": "space",
+            "key_action": "tap",
+            "delay": 0.05
+          }
+        ]
       }
     ]
   },

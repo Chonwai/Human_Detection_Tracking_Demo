@@ -7,3 +7,6 @@ torchvision>=0.17.0
 
 # Mac特定優化
 # 提示：使用pip install這些庫，Conda可能在Apple Silicon上有相容性問題 
+
+# 添加pynput依賴
+pynput>=1.7.6 
